@@ -22,7 +22,7 @@ class DatabaseHelper {
 
     return openDatabase(
       path,
-      version: 3,
+      version: 4,
 
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
@@ -40,6 +40,13 @@ class DatabaseHelper {
 
         if (oldVersion < 3) {
           await _createCategoryRelationshipsTable(db);
+        }
+
+        if (oldVersion < 4) {
+          await db.execute('''
+            ALTER TABLE songs
+            ADD COLUMN artwork_path TEXT
+          ''');
         }
       },
     );
@@ -66,6 +73,7 @@ class DatabaseHelper {
         duration INTEGER NOT NULL DEFAULT 0,
         category_id INTEGER NOT NULL,
         category_is_manual INTEGER NOT NULL DEFAULT 0,
+        artwork_path TEXT,
         FOREIGN KEY (category_id)
           REFERENCES categories(id)
       )

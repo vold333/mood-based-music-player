@@ -6,6 +6,11 @@ import '../../data/models/song.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/song_repository.dart';
 import '../../data/services/library_scanner_service.dart';
+import 'category_relationships_screen.dart';
+import '../player/now_playing_screen.dart';
+import '../../shared/widgets/artwork_image.dart';
+import '../../shared/widgets/mini_player.dart';
+import '../library/all_songs_screen.dart';
 
 class CategoryScreen extends StatefulWidget {
   const CategoryScreen({super.key});
@@ -184,94 +189,231 @@ class _CategoryScreenState extends State<CategoryScreen> {
     }
   }
 
+  
+  IconData _categoryIcon(Category category) {
+    if (category.isDefault) {
+      return Icons.library_music_rounded;
+    }
+
+    if (category.source == 'manual') {
+      return Icons.folder_special_rounded;
+    }
+
+    return Icons.music_note_rounded;
+  }
+
+  String _categoryDescription(Category category) {
+    if (category.isDefault) return 'System category';
+    if (category.source == 'manual') return 'Custom category';
+    return 'Music genre';
+  }
+
+  
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Categories'),
         actions: [
           IconButton(
+            tooltip: 'All Songs',
+            icon: const Icon(Icons.library_music_rounded),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AllSongsScreen(),
+                ),
+              );
+            },
+          ),
+          IconButton(
             tooltip: 'Rescan Library',
             onPressed: _rescanMusicLibrary,
-            icon: const Icon(Icons.sync),
+            icon: const Icon(Icons.sync_rounded),
           ),
           IconButton(
             tooltip: 'Refresh Categories',
             onPressed: _loadCategories,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
           ),
           IconButton(
             tooltip: 'Import Music Folder',
             onPressed: _importMusicFolder,
-            icon: const Icon(Icons.folder_open),
+            icon: const Icon(Icons.folder_open_rounded),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showCategoryDialog(),
-        icon: const Icon(Icons.add),
+        icon: const Icon(Icons.add_rounded),
         label: const Text('Add Category'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _categories.isEmpty
-              ? const Center(child: Text('No categories found'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: _categories.length,
-                  itemBuilder: (context, index) {
-                    final category = _categories[index];
-
-                    return Card(
-                      child: ListTile(
-                        leading: const CircleAvatar(
-                          child: Icon(Icons.library_music),
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.library_music_outlined,
+                          size: 72,
+                          color: theme.colorScheme.primary,
                         ),
-                        title: Text(category.name),
-                        subtitle: Text(
-                          category.isDefault
-                              ? 'System category'
-                              : category.source == 'manual'
-                                  ? 'Custom category'
-                                  : 'Music genre',
+                        const SizedBox(height: 20),
+                        Text(
+                          'No categories found',
+                          style: theme.textTheme.titleLarge,
                         ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CategorySongsScreen(
-                                category: category,
-                              ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Import your music folder to get started.',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 20),
+                        FilledButton.icon(
+                          onPressed: _importMusicFolder,
+                          icon: const Icon(Icons.folder_open),
+                          label: const Text('Import Music'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Your Music Categories',
+                            style: theme.textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${_categories.length} categories available',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
-                          );
-                        },
-                        trailing: category.canModify
-                            ? PopupMenuButton<String>(
-                                onSelected: (value) {
-                                  if (value == 'rename') {
-                                    _showCategoryDialog(
-                                      category: category,
-                                    );
-                                  } else if (value == 'delete') {
-                                    _deleteCategory(category);
-                                  }
-                                },
-                                itemBuilder: (context) => [
-                                  const PopupMenuItem(
-                                    value: 'rename',
-                                    child: Text('Rename'),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text('Delete'),
-                                  ),
-                                ],
-                              )
-                            : const Icon(Icons.lock_outline),
+                          ),
+                        ],
                       ),
-                    );
-                  },
+                    ),
+                    ..._categories.map((category) {
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        clipBehavior: Clip.antiAlias,
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          leading: CircleAvatar(
+                            radius: 25,
+                            backgroundColor:
+                                theme.colorScheme.primaryContainer,
+                            child: Icon(
+                              _categoryIcon(category),
+                              color: theme.colorScheme.onPrimaryContainer,
+                            ),
+                          ),
+                          title: Text(
+                            category.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              _categoryDescription(category),
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CategorySongsScreen(
+                                  category: category,
+                                ),
+                              ),
+                            );
+                          },
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Manage Relationships',
+                                icon: const Icon(
+                                  Icons.account_tree_rounded,
+                                ),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          CategoryRelationshipsScreen(
+                                        category: category,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              if (category.canModify)
+                                PopupMenuButton<String>(
+                                  tooltip: 'Category options',
+                                  onSelected: (value) {
+                                    if (value == 'rename') {
+                                      _showCategoryDialog(
+                                        category: category,
+                                      );
+                                    } else if (value == 'delete') {
+                                      _deleteCategory(category);
+                                    }
+                                  },
+                                  itemBuilder: (context) => const [
+                                    PopupMenuItem(
+                                      value: 'rename',
+                                      child: ListTile(
+                                        leading: Icon(Icons.edit_outlined),
+                                        title: Text('Rename'),
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: ListTile(
+                                        leading: Icon(Icons.delete_outline),
+                                        title: Text('Delete'),
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              else
+                                const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: Icon(Icons.lock_outline),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
                 ),
+      bottomNavigationBar: const MiniPlayer(),
     );
   }
 }
@@ -329,7 +471,16 @@ class _CategorySongsScreenState
 
   Future<void> _playSong(Song song) async {
     try {
-      await playbackHandlerInstance.playSong(song);
+      await playbackHandlerInstance.playCategorySong(song);
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const NowPlayingScreen(),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
 
@@ -424,8 +575,10 @@ class _CategorySongsScreenState
                     final song = _songs[index];
 
                     return ListTile(
-                      leading: const CircleAvatar(
-                        child: Icon(Icons.music_note),
+                      leading: ArtworkImage(
+                        artworkPath: song.artworkPath,
+                        size: 48,
+                        borderRadius: 8,
                       ),
                       title: Text(song.title),
                       subtitle: Text(
@@ -441,6 +594,7 @@ class _CategorySongsScreenState
                     );
                   },
                 ),
+                bottomNavigationBar: const MiniPlayer(),
     );
   }
 }

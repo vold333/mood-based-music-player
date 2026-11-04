@@ -10,6 +10,7 @@ class Song {
   final int categoryId;
   final String? categoryName;
   final bool categoryIsManual;
+  final String? artworkPath;
 
   const Song({
     this.id,
@@ -22,9 +23,9 @@ class Song {
     required this.categoryId,
     this.categoryName,
     this.categoryIsManual = false,
+    this.artworkPath,
   });
 
-  // Convert database Map into Song object.
   factory Song.fromMap(Map<String, dynamic> map) {
     return Song(
       id: map['id'] as int?,
@@ -37,10 +38,10 @@ class Song {
       categoryId: map['category_id'] as int,
       categoryName: map['category_name'] as String?,
       categoryIsManual: map['category_is_manual'] == 1,
+      artworkPath: map['artwork_path'] as String?,
     );
   }
 
-  // Convert Song object into database Map.
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -52,10 +53,10 @@ class Song {
       'duration': duration,
       'category_id': categoryId,
       'category_is_manual': categoryIsManual ? 1 : 0,
+      'artwork_path': artworkPath,
     };
   }
 
-  // Create a modified copy without changing the original.
   Song copyWith({
     int? id,
     String? uri,
@@ -67,6 +68,7 @@ class Song {
     int? categoryId,
     String? categoryName,
     bool? categoryIsManual,
+    String? artworkPath,
   }) {
     return Song(
       id: id ?? this.id,
@@ -79,6 +81,7 @@ class Song {
       categoryId: categoryId ?? this.categoryId,
       categoryName: categoryName ?? this.categoryName,
       categoryIsManual: categoryIsManual ?? this.categoryIsManual,
+      artworkPath: artworkPath ?? this.artworkPath,
     );
   }
 }

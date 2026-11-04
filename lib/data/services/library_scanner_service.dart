@@ -1,17 +1,21 @@
 
+// ignore_for_file: avoid_print
+
 import 'dart:io';
 
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:path/path.dart' as p;
 import 'package:saf/saf.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart';
 import '../models/song.dart';
 import '../repositories/song_repository.dart';
+import 'artwork_service.dart';
 
 class LibraryScannerService {
   final Saf _saf = Saf();
   final SongRepository _songRepository = SongRepository();
+
+  final ArtworkService _artworkService = ArtworkService();
 
   static const String _libraryUriKey = 'selected_library_uri';
 
@@ -94,6 +98,7 @@ class LibraryScannerService {
   }
 
   // Recursively scans a selected directory.
+  
   Future<int> scanDirectory(String directoryUri) async {
     int scannedCount = 0;
 
@@ -119,16 +124,32 @@ class LibraryScannerService {
             'audio_$scannedCount$extension',
           );
 
-          // Copy SAF file temporarily so the metadata reader can access it.
           await _saf.copyToLocalFile(file.uri, localPath);
 
+          // Read basic metadata without extracting artwork.
           final metadata = readMetadata(
             File(localPath),
             getImage: false,
           );
 
-          final title = metadata.title?.trim();
+          // Reuse cached artwork whenever possible.
+          String? artworkPath =
+              await _artworkService.getCachedArtworkPath(file.uri);
 
+          // Extract embedded artwork only when cache is unavailable.
+          if (artworkPath == null) {
+            final artworkMetadata = readMetadata(
+              File(localPath),
+              getImage: true,
+            );
+
+            artworkPath = await _artworkService.saveArtwork(
+              sourceUri: file.uri,
+              pictures: artworkMetadata.pictures,
+            );
+          }
+
+          final title = metadata.title?.trim();
           final artist = metadata.artist?.trim();
 
           final genre = metadata.genres
@@ -147,6 +168,7 @@ class LibraryScannerService {
             genre: genre,
             duration: metadata.duration?.inSeconds ?? 0,
             categoryId: 0,
+            artworkPath: artworkPath,
           );
 
           await _songRepository.saveScannedSong(song);
