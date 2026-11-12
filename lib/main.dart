@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
 
 import 'app/app.dart';
+import 'app/theme/theme_controller.dart';
 import 'features/player/playback_handler.dart';
 
 late AudioHandler audioHandler;
@@ -26,6 +27,8 @@ Future<void> main() async {
   );
 
   debugPrint('AudioService initialized.');
+
+  themeController = await ThemeController.load();
 
   runApp(const MoodMusicApp());
 }

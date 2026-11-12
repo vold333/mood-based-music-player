@@ -1,22 +1,60 @@
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../features/categories/category_screen.dart';
 import '../data/services/library_scanner_service.dart';
+import 'theme/app_theme.dart';
+import 'theme/theme_controller.dart';
 
 class MoodMusicApp extends StatelessWidget {
   const MoodMusicApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Only the theme is re-resolved when the choice changes. The navigator,
+    // screens, playback and any running scan keep their state.
+    return ListenableBuilder(
+      listenable: themeController,
+      builder: (context, _) {
     return MaterialApp(
-      title: 'Mood Music Player',
+          title: 'Soul King',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: Colors.deepPurple,
-        brightness: Brightness.dark,
-        useMaterial3: true,
-      ),
+      theme: AppTheme.day,
+      darkTheme: AppTheme.night,
+          themeMode: themeController.mode,
+          builder: (context, child) => _SystemBarsStyle(
+            child: child ?? const SizedBox.shrink(),
+          ),
       home: const CategoryScreen(),
+    );
+      },
+    );
+  }
+}
+
+/// Keeps the status bar and navigation bar icons readable on the active theme.
+class _SystemBarsStyle extends StatelessWidget {
+  const _SystemBarsStyle({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final iconBrightness =
+        theme.brightness == Brightness.dark ? Brightness.light : Brightness.dark;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: iconBrightness,
+        statusBarBrightness: theme.brightness,
+        systemNavigationBarColor: theme.colorScheme.surface,
+        systemNavigationBarIconBrightness: iconBrightness,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarContrastEnforced: false,
+      ),
+      child: child,
     );
   }
 }

@@ -1,10 +1,15 @@
 
 import 'package:flutter/material.dart';
 
+import '../../app/theme/soul_tokens.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/song_repository.dart';
-import '../../shared/widgets/artwork_image.dart';
+import '../../data/repositories/category_repository.dart';
 import '../../shared/widgets/mini_player.dart';
+import '../../shared/widgets/song_tile.dart';
+import '../../shared/widgets/soul_choice_chip.dart';
+import '../../shared/widgets/wave_strip.dart';
+import '../../shared/widgets/bulk_category_picker.dart';
 import '../player/playback_handler.dart';
 import '../player/now_playing_screen.dart';
 
@@ -15,20 +20,53 @@ enum SongSortOption {
 }
 
 class AllSongsScreen extends StatefulWidget {
-  const AllSongsScreen({super.key});
+  /// Opens with the search field focused (used by the Home search shortcut).
+  final bool autofocusSearch;
+
+  const AllSongsScreen({super.key, this.autofocusSearch = false});
 
   @override
   State<AllSongsScreen> createState() => _AllSongsScreenState();
 }
 
+/// A song with its lowercase sort and search keys, computed once per load so
+/// typing and sorting stay fast on large libraries.
+class _SongEntry {
+  _SongEntry(this.song)
+      : titleKey = song.title.toLowerCase(),
+        artistKey = (song.artist ?? 'Unknown Artist').toLowerCase(),
+        searchKey = [
+          song.title,
+          song.artist ?? '',
+          song.album ?? '',
+          song.categoryName ?? '',
+        ].join('\n').toLowerCase();
+
+  final Song song;
+  final String titleKey;
+  final String artistKey;
+  final String searchKey;
+}
+
 class _AllSongsScreenState extends State<AllSongsScreen> {
   final SongRepository _songRepository = SongRepository();
+  final CategoryRepository _categoryRepository = CategoryRepository();
+  final Set<int> _selectedSongIds = {};
   final TextEditingController _searchController =
       TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
-  List<Song> _songs = [];
+  // Every song, in the selected sort order.
+  List<_SongEntry> _entries = [];
+
+  // The entries that match the search, in the same order.
+  List<_SongEntry> _visible = [];
+
   bool _loading = true;
   SongSortOption _sortOption = SongSortOption.title;
+
+  String _appliedQuery = '';
+  bool _hasText = false;
 
   @override
   void initState() {
@@ -37,15 +75,30 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
     _loadSongs();
   }
 
-  void _onSearchChanged() {
-    if (mounted) setState(() {});
-  }
-
   @override
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged() {
+    if (!mounted) return;
+
+    final query = _searchController.text.trim().toLowerCase();
+    final hasText = _searchController.text.isNotEmpty;
+
+    // Cursor moves also notify the controller; only react to real changes.
+    if (query == _appliedQuery && hasText == _hasText) return;
+
+    setState(() {
+      _appliedQuery = query;
+      _hasText = hasText;
+      _applyFilter();
+    });
+
+    _scrollToTop();
   }
 
   Future<void> _loadSongs() async {
@@ -59,8 +112,11 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
       if (!mounted) return;
 
       setState(() {
-        _songs = songs;
-        _sortSongs();
+        _entries = songs.map(_SongEntry.new).toList();
+        final availableIds = songs.map((song) => song.id).whereType<int>().toSet();
+        _selectedSongIds.removeWhere((id) => !availableIds.contains(id));
+        _sortEntries();
+        _applyFilter();
         _loading = false;
       });
     } catch (e) {
@@ -74,62 +130,114 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
     }
   }
 
-  void _sortSongs() {
-    switch (_sortOption) {
-      case SongSortOption.title:
-        _songs.sort(
-          (a, b) => a.title.toLowerCase().compareTo(
-                b.title.toLowerCase(),
-              ),
-        );
-        break;
+  // Sorts every song. Ties fall back to the title, then the song ID, so the
+  // order is always the same for the same library.
+  void _sortEntries() {
+    int compare(_SongEntry a, _SongEntry b) {
+      final primary = switch (_sortOption) {
+        SongSortOption.title => a.titleKey.compareTo(b.titleKey),
+        SongSortOption.artist => a.artistKey.compareTo(b.artistKey),
+        SongSortOption.duration =>
+          b.song.duration.compareTo(a.song.duration),
+      };
 
-      case SongSortOption.artist:
-        _songs.sort(
-          (a, b) => (a.artist ?? 'Unknown Artist')
-              .toLowerCase()
-              .compareTo(
-                (b.artist ?? 'Unknown Artist').toLowerCase(),
-              ),
-        );
-        break;
+      if (primary != 0) return primary;
 
-      case SongSortOption.duration:
-        _songs.sort(
-          (a, b) => b.duration.compareTo(a.duration),
-        );
-        break;
+      final byTitle = a.titleKey.compareTo(b.titleKey);
+
+      if (byTitle != 0) return byTitle;
+
+      return (a.song.id ?? 0).compareTo(b.song.id ?? 0);
+    }
+
+    _entries.sort(compare);
+  }
+
+  // Keeps the songs that match the search. The order is preserved.
+  void _applyFilter() {
+    if (_appliedQuery.isEmpty) {
+      _visible = _entries;
+      return;
+    }
+
+    _visible = _entries
+        .where((entry) => entry.searchKey.contains(_appliedQuery))
+        .toList();
+  }
+
+  void _changeSort(SongSortOption option) {
+    if (option == _sortOption) return;
+
+    setState(() {
+      _sortOption = option;
+      _sortEntries();
+      _applyFilter();
+    });
+
+    _scrollToTop();
+  }
+
+  void _scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
     }
   }
 
-  List<Song> get _filteredSongs {
-    final query = _searchController.text.trim().toLowerCase();
+  bool get _selectionMode => _selectedSongIds.isNotEmpty;
 
-    if (query.isEmpty) return _songs;
-
-    return _songs.where((song) {
-      return song.title.toLowerCase().contains(query) ||
-          (song.artist ?? '').toLowerCase().contains(query) ||
-          (song.album ?? '').toLowerCase().contains(query) ||
-          (song.categoryName ?? '').toLowerCase().contains(query);
-    }).toList();
+  void _toggleSelection(Song song) {
+    final id = song.id;
+    if (id == null) return;
+    setState(() {
+      if (!_selectedSongIds.add(id)) {
+        _selectedSongIds.remove(id);
+      }
+    });
   }
 
-  String _formatDuration(int seconds) {
-    final duration = Duration(seconds: seconds);
-
-    return '${duration.inMinutes}:'
-        '${duration.inSeconds.remainder(60).toString().padLeft(2, '0')}';
+  void _selectVisible() {
+    setState(() {
+      for (final entry in _visible) {
+        final id = entry.song.id;
+        if (id != null) _selectedSongIds.add(id);
+      }
+    });
   }
 
-  String get _sortLabel {
-    switch (_sortOption) {
-      case SongSortOption.title:
-        return 'Title';
-      case SongSortOption.artist:
-        return 'Artist';
-      case SongSortOption.duration:
-        return 'Longest first';
+  void _clearSelection() {
+    setState(_selectedSongIds.clear);
+  }
+
+  Future<void> _moveSelectedSongs() async {
+    if (_selectedSongIds.isEmpty) return;
+    try {
+      final categories = await _categoryRepository.getAllCategories();
+      if (!mounted) return;
+      final ids = List<int>.from(_selectedSongIds);
+      final destinationId = await BulkCategoryPicker.show(
+        context,
+        categories: categories,
+        selectedCount: ids.length,
+      );
+      if (!mounted || destinationId == null) return;
+
+      final result = await _songRepository.assignCategoryBulk(ids, destinationId);
+      if (!mounted) return;
+      setState(_selectedSongIds.clear);
+      await _loadSongs();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Moved ${result.moved}; unchanged ${result.unchanged}',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to move songs: $e')),
+      );
     }
   }
 
@@ -154,74 +262,233 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
     }
   }
 
-  void _changeSort(SongSortOption option) {
-    setState(() {
-      _sortOption = option;
-      _sortSongs();
-    });
+  String _sortLabel(SongSortOption option) {
+    switch (option) {
+      case SongSortOption.title:
+        return 'Title';
+      case SongSortOption.artist:
+        return 'Artist';
+      case SongSortOption.duration:
+        return 'Duration';
+    }
+  }
+
+  String get _sortDescription {
+    switch (_sortOption) {
+      case SongSortOption.title:
+        return 'Sorted A-Z by title';
+      case SongSortOption.artist:
+        return 'Sorted A-Z by artist';
+      case SongSortOption.duration:
+        return 'Longest first';
+    }
+  }
+
+  String _countLabel(int count) {
+    return count == 1 ? '1 song' : '$count songs';
+  }
+
+  String get _summary {
+    final total = _entries.length;
+
+    final count = _appliedQuery.isEmpty
+        ? _countLabel(total)
+        : '${_visible.length} of ${_countLabel(total)}';
+
+    return '$count \u00b7 $_sortDescription';
+  }
+
+  Widget _buildSearchField() {
+    final scheme = Theme.of(context).colorScheme;
+
+    return TextField(
+      controller: _searchController,
+      autofocus: widget.autofocusSearch,
+      textInputAction: TextInputAction.search,
+      autocorrect: false,
+      onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+      decoration: InputDecoration(
+        hintText: 'Search songs, artists, albums...',
+        prefixIcon: const Icon(Icons.search_rounded),
+        suffixIcon: _hasText
+            ? IconButton(
+                tooltip: 'Clear search',
+                icon: const Icon(Icons.close_rounded),
+                onPressed: _searchController.clear,
+              )
+            : null,
+        filled: true,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: scheme.outline),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: context.soul.accentText,
+            width: 2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSortChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          for (final option in SongSortOption.values)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: SoulChoiceChip(
+                label: _sortLabel(option),
+                tooltip: option == SongSortOption.duration
+                    ? 'Longest first'
+                    : null,
+                selected: option == _sortOption,
+                onSelected: () => _changeSort(option),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEmptyState({
     required IconData icon,
     required String title,
     required String subtitle,
+    Widget? action,
   }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: scheme.primaryContainer,
+              ),
+              child: Icon(
               icon,
-              size: 64,
-              color: Theme.of(context).colorScheme.primary,
+                size: 44,
+                color: scheme.onPrimaryContainer,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Text(
               title,
-              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
             ),
+            if (action != null) ...[
+              const SizedBox(height: 20),
+              action,
+            ],
           ],
         ),
       ),
     );
   }
 
+  Widget _buildSongList() {
+    final songs = _visible;
+
+    return ListView.separated(
+      controller: _scrollController,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.only(top: 4, bottom: 12),
+      // One extra item for the footer. Rows are built lazily.
+      itemCount: songs.length + 1,
+      separatorBuilder: (_, __) => const Divider(
+        height: 1,
+        indent: 84,
+        endIndent: 16,
+      ),
+      itemBuilder: (context, index) {
+        if (index == songs.length) {
+          return const Padding(
+            padding: EdgeInsets.only(top: 16),
+            child: WaveStrip(height: 56),
+          );
+        }
+
+        final song = songs[index].song;
+
+        final selected = song.id != null && _selectedSongIds.contains(song.id);
+        return SongTile(
+          song: song,
+          selectionMode: _selectionMode,
+          selected: selected,
+          onLongPress: () {
+            if (!_selectionMode) _toggleSelection(song);
+          },
+          onTap: () {
+            if (_selectionMode) {
+              _toggleSelection(song);
+            } else {
+              _playSong(song);
+            }
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final songs = _filteredSongs;
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('All Songs'),
-        actions: [
-          PopupMenuButton<SongSortOption>(
-            tooltip: 'Sort songs',
-            icon: const Icon(Icons.sort_rounded),
-            initialValue: _sortOption,
-            onSelected: _changeSort,
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: SongSortOption.title,
-                child: Text('Sort by title'),
-              ),
-              PopupMenuItem(
-                value: SongSortOption.artist,
-                child: Text('Sort by artist'),
-              ),
-              PopupMenuItem(
-                value: SongSortOption.duration,
-                child: Text('Longest first'),
-              ),
-            ],
-          ),
+        leading: _selectionMode
+            ? IconButton(
+                tooltip: 'Exit selection',
+                onPressed: _clearSelection,
+                icon: const Icon(Icons.close_rounded),
+              )
+            : null,
+        title: Text(
+          _selectionMode ? '${_selectedSongIds.length} selected' : 'All Songs',
+        ),
+        actions: _selectionMode
+            ? [
+                TextButton(
+                  onPressed: _selectVisible,
+                  child: Text(_appliedQuery.isEmpty ? 'Select all' : 'Select visible'),
+                ),
+                IconButton(
+                  tooltip: 'Clear selection',
+                  onPressed: _clearSelection,
+                  icon: const Icon(Icons.deselect_rounded),
+                ),
+                IconButton(
+                  tooltip: 'Move to category',
+                  onPressed: _moveSelectedSongs,
+                  icon: const Icon(Icons.drive_file_move_outlined),
+                ),
+              ]
+            : [
           IconButton(
             tooltip: 'Refresh',
             onPressed: _loading ? null : _loadSongs,
@@ -231,7 +498,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _songs.isEmpty
+          : _entries.isEmpty
               ? _buildEmptyState(
                   icon: Icons.library_music_outlined,
                   title: 'Your library is empty',
@@ -242,111 +509,36 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Search songs, artists, albums...',
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.close),
-                                  onPressed: _searchController.clear,
-                                )
-                              : null,
-                          filled: true,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
+                      child: _buildSearchField(),
+                    ),
+                    _buildSortChips(),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _summary,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            '${songs.length} songs',
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          const Spacer(),
-                          Text(
-                            'Sorted by $_sortLabel',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
                     Expanded(
-                      child: songs.isEmpty
+                      child: _visible.isEmpty
                           ? _buildEmptyState(
                               icon: Icons.search_off_rounded,
                               title: 'No matching songs',
                               subtitle:
                                   'Try another song, artist or album name.',
+                              action: FilledButton.tonal(
+                                onPressed: _searchController.clear,
+                                child: const Text('Clear search'),
+                                      ),
                             )
-                          : ListView.separated(
-                              padding: const EdgeInsets.only(
-                                top: 4,
-                                bottom: 12,
-                              ),
-                              itemCount: songs.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(
-                                height: 1,
-                                indent: 80,
-                              ),
-                              itemBuilder: (context, index) {
-                                final song = songs[index];
-
-                                return ListTile(
-                                  contentPadding:
-                                      const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 5,
-                                  ),
-                                  leading: ArtworkImage(
-                                    artworkPath: song.artworkPath,
-                                    size: 52,
-                                    borderRadius: 10,
-                                  ),
-                                  title: Text(
-                                    song.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  subtitle: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        song.artist ?? 'Unknown Artist',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        song.categoryName ?? 'Uncategorized',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall,
-                                      ),
-                                    ],
-                                  ),
-                                  trailing: Text(
-                                    _formatDuration(song.duration),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall,
-                                  ),
-                                  onTap: () => _playSong(song),
-                                );
-                              },
-                            ),
+                          : _buildSongList(),
                     ),
                   ],
                 ),

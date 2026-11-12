@@ -1,10 +1,13 @@
 
 import 'package:flutter/material.dart';
 
+import '../../app/theme/soul_tokens.dart';
 import '../../data/models/category.dart';
 import '../../data/models/category_relationship.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/category_relationship_repository.dart';
+import 'widgets/relationship_editor_sheet.dart';
+import 'widgets/relationship_tile.dart';
 
 class CategoryRelationshipsScreen extends StatefulWidget {
   final Category category;
@@ -19,6 +22,19 @@ class CategoryRelationshipsScreen extends StatefulWidget {
       _CategoryRelationshipsScreenState();
 }
 
+/// A priority heading in the relationship list.
+class _PriorityGroup {
+  const _PriorityGroup({
+    required this.priority,
+    required this.isFirst,
+    required this.count,
+  });
+
+  final int priority;
+  final bool isFirst;
+  final int count;
+}
+
 class _CategoryRelationshipsScreenState
     extends State<CategoryRelationshipsScreen> {
   final CategoryRepository _categoryRepository =
@@ -28,7 +44,9 @@ class _CategoryRelationshipsScreenState
       CategoryRelationshipRepository();
 
   List<Category> _categories = [];
+  Map<int, Category> _categoriesById = {};
   List<CategoryRelationship> _relationships = [];
+  Map<int, int> _songCounts = {};
 
   bool _loading = true;
 
@@ -48,11 +66,18 @@ class _CategoryRelationshipsScreenState
         widget.category.id!,
       );
 
+      final counts = await _categoryRepository.getCategorySongCounts();
+
       if (!mounted) return;
 
       setState(() {
         _categories = categories;
+        _categoriesById = {
+          for (final category in categories)
+            if (category.id != null) category.id!: category,
+        };
         _relationships = relationships;
+        _songCounts = counts;
         _loading = false;
       });
     } catch (e) {
@@ -63,6 +88,8 @@ class _CategoryRelationshipsScreenState
     }
   }
 
+  // Other categories that are not already related. The current category is
+  // never offered, so it cannot be related to itself.
   List<Category> get _availableCategories {
     final relatedIds =
         _relationships.map((r) => r.toCategoryId).toSet();
@@ -87,20 +114,21 @@ class _CategoryRelationshipsScreenState
       return;
     }
 
-    final selection = await showDialog<Map<String, int>>(
-      context: context,
-      builder: (_) => _AddRelationshipDialog(
-        categories: available,
-      ),
+    final result = await RelationshipEditorSheet.showAdd(
+      context,
+      sourceName: widget.category.name,
+      targets: available,
     );
 
-    if (!mounted || selection == null) return;
+    if (!mounted || result == null || result.targetCategoryId == null) {
+      return;
+    }
 
     try {
       await _relationshipRepository.addRelationship(
         fromCategoryId: widget.category.id!,
-        toCategoryId: selection['categoryId']!,
-        priority: selection['priority']!,
+        toCategoryId: result.targetCategoryId!,
+        priority: result.priority,
       );
 
       await _loadData();
@@ -110,6 +138,28 @@ class _CategoryRelationshipsScreenState
     } catch (e) {
       if (!mounted) return;
       _showMessage('Failed to add relationship: $e');
+    }
+  }
+
+  Future<void> _editRelationship(
+    CategoryRelationship relationship,
+  ) async {
+    final result = await RelationshipEditorSheet.showEdit(
+      context,
+      sourceName: widget.category.name,
+      relationship: relationship,
+      target: _categoriesById[relationship.toCategoryId],
+    );
+
+    if (!mounted || result == null) return;
+
+    if (result.remove) {
+      await _removeRelationship(relationship);
+      return;
+    }
+
+    if (result.priority != relationship.priority) {
+      await _updatePriority(relationship, result.priority);
     }
   }
 
@@ -124,6 +174,9 @@ class _CategoryRelationshipsScreenState
       );
 
       await _loadData();
+
+      if (!mounted) return;
+      _showMessage('Priority updated.');
     } catch (e) {
       if (!mounted) return;
       _showMessage('Failed to update priority: $e');
@@ -148,172 +201,285 @@ class _CategoryRelationshipsScreenState
     }
   }
 
+  // Turns the relationships (already sorted by priority) into priority
+  // headings followed by their relationships.
+  List<Object> _buildRows() {
+    final rows = <Object>[];
+
+    int? currentPriority;
+    var groupIndex = -1;
+
+    for (final relationship in _relationships) {
+      if (relationship.priority != currentPriority) {
+        currentPriority = relationship.priority;
+        groupIndex++;
+
+        rows.add(
+          _PriorityGroup(
+            priority: relationship.priority,
+            isFirst: groupIndex == 0,
+            count: _relationships
+                .where((r) => r.priority == relationship.priority)
+                .length,
+          ),
+        );
+      }
+
+      rows.add(relationship);
+    }
+
+    return rows;
+  }
+
+  Widget _buildExplainer() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.alt_route_rounded,
+              size: 28,
+              color: context.soul.accentText,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Where the music goes next',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'When every song in "${widget.category.name}" has '
+                    'played, playback moves on to one of its related '
+                    'categories. It picks the highest priority that has '
+                    'songs (1 is the highest). If several share that '
+                    'priority, one is chosen at random. If none has songs, '
+                    'playback stops.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState({required bool hasTargets}) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        children: [
+          Container(
+            width: 88,
+            height: 88,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: scheme.primaryContainer,
+            ),
+            child: Icon(
+              Icons.add_link_rounded,
+              size: 44,
+              color: scheme.onPrimaryContainer,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'No related categories yet',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            hasTargets
+                ? 'Add a category to continue the music after '
+                    '"${widget.category.name}" finishes. Without one, '
+                    'playback stops at the end of this category.'
+                : 'There are no other categories to relate to yet. '
+                    'Create another category from Home first.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAllRelatedNote() {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      child: Text(
+        'Every other category is already related.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRow(List<Object> rows, int index) {
+    final row = rows[index];
+
+    if (row is _PriorityGroup) {
+      return Padding(
+        padding: EdgeInsets.only(top: index == 0 ? 0 : 16, bottom: 8),
+        child: _PriorityHeader(group: row),
+      );
+    }
+
+    final relationship = row as CategoryRelationship;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: RelationshipTile(
+        relationship: relationship,
+        target: _categoriesById[relationship.toCategoryId],
+        songCount: _songCounts[relationship.toCategoryId] ?? 0,
+        onEdit: () => _editRelationship(relationship),
+        onRemove: () => _removeRelationship(relationship),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final available = _availableCategories;
+    final rows = _buildRows();
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.category.name} Relationships'),
+        title: const Text('Relationships'),
         actions: [
           IconButton(
             tooltip: 'Refresh',
             onPressed: _loadData,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: !_loading && available.isNotEmpty
+          ? FloatingActionButton.extended(
         onPressed: _addRelationship,
-        icon: const Icon(Icons.add_link),
-        label: const Text('Add Related Category'),
-      ),
+              icon: const Icon(Icons.add_link_rounded),
+              label: const Text('Add related category'),
+            )
+          : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _relationships.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No related categories yet.\n'
-                    'Add categories to define transitions.',
-                    textAlign: TextAlign.center,
+          : CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: _buildExplainer(),
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: _relationships.length,
-                  itemBuilder: (context, index) {
-                    final relationship = _relationships[index];
-
-                    return Card(
-                      child: ListTile(
-                        leading: const CircleAvatar(
-                          child: Icon(Icons.library_music),
-                        ),
-                        title: Text(
-                          relationship.toCategoryName ??
-                              'Unknown Category',
-                        ),
-                        subtitle: Text(
-                          'Transition priority: ${relationship.priority}',
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            DropdownButtonHideUnderline(
-                              child: DropdownButton<int>(
-                                value: relationship.priority,
-                                items: List.generate(
-                                  5,
-                                  (index) => DropdownMenuItem(
-                                    value: index + 1,
-                                    child: Text('${index + 1}'),
+                ),
+                if (rows.isEmpty)
+                  SliverToBoxAdapter(
+                    child: _buildEmptyState(hasTargets: available.isNotEmpty),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildRow(rows, index),
+                        childCount: rows.length,
                                   ),
                                 ),
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    _updatePriority(
-                                      relationship,
-                                      value,
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: 'Remove relationship',
-                              onPressed: () =>
-                                  _removeRelationship(relationship),
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: Colors.redAccent,
-                              ),
-                            ),
+                  ),
+                if (rows.isNotEmpty && available.isEmpty)
+                  SliverToBoxAdapter(child: _buildAllRelatedNote()),
+                // Room for the Add button.
+                const SliverToBoxAdapter(child: SizedBox(height: 96)),
                           ],
                         ),
-                      ),
                     );
-                  },
-                ),
-    );
   }
 }
 
-class _AddRelationshipDialog extends StatefulWidget {
-  final List<Category> categories;
+/// Heading for a group of relationships that share a priority.
+class _PriorityHeader extends StatelessWidget {
+  const _PriorityHeader({required this.group});
 
-  const _AddRelationshipDialog({
-    required this.categories,
-  });
-
-  @override
-  State<_AddRelationshipDialog> createState() =>
-      _AddRelationshipDialogState();
-}
-
-class _AddRelationshipDialogState
-    extends State<_AddRelationshipDialog> {
-  int? _selectedCategoryId;
-  int _priority = 1;
+  final _PriorityGroup group;
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Add Related Category'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    final caption = [
+      group.isFirst ? 'Tried first' : 'Tried if nothing above has songs',
+      if (group.count > 1) 'random pick among ${group.count}',
+    ].join(' \u00b7 ');
+
+    return Row(
         children: [
-          DropdownButtonFormField<int>(
-            initialValue: _selectedCategoryId,
-            decoration: const InputDecoration(
-              labelText: 'Related Category',
+        // The number is also in the text beside it, so it is hidden from
+        // screen readers here.
+        ExcludeSemantics(
+          child: Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: group.isFirst ? scheme.primary : scheme.primaryContainer,
             ),
-            items: widget.categories.map((category) {
-              return DropdownMenuItem<int>(
-                value: category.id!,
-                child: Text(category.name),
-              );
-            }).toList(),
-            onChanged: (value) {
-              setState(() => _selectedCategoryId = value);
-            },
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<int>(
-            initialValue: _priority,
-            decoration: const InputDecoration(
-              labelText: 'Transition Priority',
-            ),
-            items: List.generate(
-              5,
-              (index) => DropdownMenuItem<int>(
-                value: index + 1,
+            child: FittedBox(
                 child: Text(
-                  'Priority ${index + 1}'
-                  '${index == 0 ? ' (Highest)' : ''}',
+                '${group.priority}',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: group.isFirst
+                      ? scheme.onPrimary
+                      : scheme.onPrimaryContainer,
                 ),
               ),
             ),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _priority = value);
-              }
-            },
           ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _selectedCategoryId == null
-              ? null
-              : () {
-                  Navigator.pop(context, {
-                    'categoryId': _selectedCategoryId!,
-                    'priority': _priority,
-                  });
-                },
-          child: const Text('Add'),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Priority ${group.priority}',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+        ),
+              Text(
+                caption,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );

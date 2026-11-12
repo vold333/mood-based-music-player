@@ -17,6 +17,22 @@ class CategoryRepository {
     return result.map((map) => Category.fromMap(map)).toList();
   }
 
+  // Number of songs in each category, keyed by category ID. Read-only.
+  // Categories without songs are absent from the map.
+  Future<Map<int, int>> getCategorySongCounts() async {
+    final db = await _databaseHelper.database;
+
+    final result = await db.rawQuery(
+      'SELECT category_id, COUNT(*) AS song_count '
+      'FROM songs GROUP BY category_id',
+    );
+
+    return {
+      for (final row in result)
+        row['category_id'] as int: row['song_count'] as int,
+    };
+  }
+
   // Get Uncategorized category ID.
   Future<int> getUncategorizedId() async {
     final db = await _databaseHelper.database;
@@ -90,7 +106,8 @@ class CategoryRepository {
 
   // Rename an existing category.
   Future<void> renameCategory(int categoryId, String newName) async {
-    final normalizedName = newName.trim().replaceAll(RegExp(r'\s+'), ' ');
+    final normalizedName =
+        newName.trim().replaceAll(RegExp(r'\s+'), ' ');
 
     if (normalizedName.isEmpty) {
       throw ArgumentError('Category name cannot be empty.');
@@ -102,29 +119,42 @@ class CategoryRepository {
 
     final db = await _databaseHelper.database;
 
-    final result = await db.query(
-      'categories',
-      where: 'id = ?',
-      whereArgs: [categoryId],
-      limit: 1,
-    );
+    await db.transaction((txn) async {
+      final result = await txn.query(
+        'categories',
+        where: 'id = ?',
+        whereArgs: [categoryId],
+        limit: 1,
+      );
 
-    if (result.isEmpty) {
-      throw StateError('Category not found.');
-    }
+      if (result.isEmpty) {
+        throw StateError('Category not found.');
+      }
 
-    final category = Category.fromMap(result.first);
+      final category = Category.fromMap(result.first);
 
-    if (!category.canModify) {
-      throw StateError('This category cannot be renamed.');
-    }
+      if (!category.canModify) {
+        throw StateError('This category cannot be renamed.');
+      }
 
-    await db.update(
-      'categories',
-      {'name': normalizedName},
-      where: 'id = ?',
-      whereArgs: [categoryId],
-    );
+      await txn.update(
+        'categories',
+        {
+          'name': normalizedName,
+          'source': 'manual',
+        },
+        where: 'id = ?',
+        whereArgs: [categoryId],
+      );
+
+      // Preserve the renamed category during future rescans.
+      await txn.update(
+        'songs',
+        {'category_is_manual': 1},
+        where: 'category_id = ?',
+        whereArgs: [categoryId],
+      );
+    });
   }
 
   // Delete a category and move its songs to Uncategorized.
@@ -164,9 +194,13 @@ class CategoryRepository {
       final uncategorizedId =
           uncategorizedResult.first['id'] as int;
 
+      // Preserve Uncategorized assignment during future rescans.
       await txn.update(
         'songs',
-        {'category_id': uncategorizedId},
+        {
+          'category_id': uncategorizedId,
+          'category_is_manual': 1,
+        },
         where: 'category_id = ?',
         whereArgs: [categoryId],
       );

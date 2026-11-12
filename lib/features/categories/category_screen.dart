@@ -1,16 +1,25 @@
 
 import 'package:flutter/material.dart';
-import '../player/playback_handler.dart';
 import '../../data/models/category.dart';
-import '../../data/models/song.dart';
 import '../../data/repositories/category_repository.dart';
-import '../../data/repositories/song_repository.dart';
 import '../../data/services/library_scanner_service.dart';
-import 'category_relationships_screen.dart';
-import '../player/now_playing_screen.dart';
-import '../../shared/widgets/artwork_image.dart';
 import '../../shared/widgets/mini_player.dart';
+import '../../shared/widgets/theme_selector_sheet.dart';
 import '../library/all_songs_screen.dart';
+import 'category_name_dialog.dart';
+import 'category_relationships_screen.dart';
+import 'category_songs_screen.dart';
+import 'widgets/category_actions_sheet.dart';
+import 'widgets/category_card.dart';
+import 'widgets/scan_overlay.dart';
+import 'widgets/soul_header.dart';
+
+enum _HomeAction {
+  theme,
+  importFolder,
+  rescan,
+  refresh,
+}
 
 class CategoryScreen extends StatefulWidget {
   const CategoryScreen({super.key});
@@ -23,8 +32,19 @@ class _CategoryScreenState extends State<CategoryScreen> {
   final CategoryRepository _categoryRepository =
       CategoryRepository();
 
+  final LibraryScannerService _scannerService =
+      LibraryScannerService();
+
+  // Updated by the scanner callback. Only the scan overlay listens to it, so a
+  // scan tick no longer rebuilds the whole screen.
+  final ValueNotifier<int> _scanProgress = ValueNotifier<int>(0);
+
   List<Category> _categories = [];
+  Map<int, int> _songCounts = {};
   bool _loading = true;
+
+  bool _isScanning = false;
+  bool _refreshing = false;
 
   @override
   void initState() {
@@ -32,12 +52,28 @@ class _CategoryScreenState extends State<CategoryScreen> {
     _loadCategories();
   }
 
-  final LibraryScannerService _scannerService =
-    LibraryScannerService();
+  @override
+  void dispose() {
+    _scanProgress.dispose();
+    super.dispose();
+  }
+
+  void _reportScanProgress(int count) {
+    if (mounted) {
+      _scanProgress.value = count;
+    }
+  }
 
   Future<void> _importMusicFolder() async {
+    if (_isScanning) return;
+
+    _scanProgress.value = 0;
+    setState(() => _isScanning = true);
+
     try {
-      final count = await _scannerService.pickAndScanLibrary();
+      final count = await _scannerService.pickAndScanLibrary(
+        onProgress: _reportScanProgress,
+      );
 
       if (!mounted || count == null) return;
 
@@ -48,12 +84,23 @@ class _CategoryScreenState extends State<CategoryScreen> {
     } catch (e) {
       if (!mounted) return;
       _showMessage('Import failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isScanning = false);
+      }
     }
   }
 
   Future<void> _rescanMusicLibrary() async {
+    if (_isScanning) return;
+
+    _scanProgress.value = 0;
+    setState(() => _isScanning = true);
+
     try {
-      final count = await _scannerService.rescanSavedLibrary();
+      final count = await _scannerService.rescanSavedLibrary(
+        onProgress: _reportScanProgress,
+      );
 
       if (!mounted) return;
 
@@ -67,23 +114,31 @@ class _CategoryScreenState extends State<CategoryScreen> {
       await _loadCategories();
 
       if (!mounted) return;
-
       _showMessage('Rescan completed! $count songs scanned.');
     } catch (e) {
       if (!mounted) return;
       _showMessage('Rescan failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isScanning = false);
+      }
     }
   }
 
-  Future<void> _loadCategories() async {
+  Future<void> _loadCategories({bool showProgress = false}) async {
+    if (showProgress && mounted) {
+      setState(() => _refreshing = true);
+    }
+
     try {
-      final categories =
-          await _categoryRepository.getAllCategories();
+      final categories = await _categoryRepository.getAllCategories();
+      final counts = await _categoryRepository.getCategorySongCounts();
 
       if (!mounted) return;
 
       setState(() {
         _categories = categories;
+        _songCounts = counts;
         _loading = false;
       });
     } catch (e) {
@@ -91,6 +146,10 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
       setState(() => _loading = false);
       _showMessage('Failed to load categories: $e');
+    } finally {
+      if (mounted && showProgress) {
+        setState(() => _refreshing = false);
+      }
     }
   }
 
@@ -108,7 +167,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
-        return _CategoryNameDialog(
+        return CategoryNameDialog(
           initialName: category?.name ?? '',
           isEditing: isEditing,
         );
@@ -189,476 +248,308 @@ class _CategoryScreenState extends State<CategoryScreen> {
     }
   }
 
-  
-  IconData _categoryIcon(Category category) {
-    if (category.isDefault) {
-      return Icons.library_music_rounded;
-    }
+  Future<void> _openSongs(Category category) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CategorySongsScreen(category: category),
+      ),
+    );
 
-    if (category.source == 'manual') {
-      return Icons.folder_special_rounded;
-    }
-
-    return Icons.music_note_rounded;
+    // Songs can be moved to another category on that screen, so refresh the
+    // categories and their song counts when it is closed.
+    if (!mounted) return;
+    await _loadCategories();
   }
 
-  String _categoryDescription(Category category) {
-    if (category.isDefault) return 'System category';
-    if (category.source == 'manual') return 'Custom category';
-    return 'Music genre';
+  void _openRelationships(Category category) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CategoryRelationshipsScreen(category: category),
+      ),
+    );
   }
-
   
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Categories'),
-        actions: [
-          IconButton(
-            tooltip: 'All Songs',
-            icon: const Icon(Icons.library_music_rounded),
-            onPressed: () {
+  void _openAllSongs({bool focusSearch = false}) {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const AllSongsScreen(),
+        builder: (_) => AllSongsScreen(autofocusSearch: focusSearch),
                 ),
               );
-            },
-          ),
-          IconButton(
-            tooltip: 'Rescan Library',
-            onPressed: _rescanMusicLibrary,
-            icon: const Icon(Icons.sync_rounded),
-          ),
-          IconButton(
-            tooltip: 'Refresh Categories',
-            onPressed: _loadCategories,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          IconButton(
-            tooltip: 'Import Music Folder',
-            onPressed: _importMusicFolder,
-            icon: const Icon(Icons.folder_open_rounded),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCategoryDialog(),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Category'),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _categories.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.library_music_outlined,
-                          size: 72,
-                          color: theme.colorScheme.primary,
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'No categories found',
-                          style: theme.textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Import your music folder to get started.',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: 20),
-                        FilledButton.icon(
-                          onPressed: _importMusicFolder,
-                          icon: const Icon(Icons.folder_open),
-                          label: const Text('Import Music'),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+  }
+
+  Future<void> _showCategoryActions(Category category) async {
+    final action = await CategoryActionsSheet.show(context, category);
+
+    if (!mounted || action == null) return;
+
+    switch (action) {
+      case CategoryAction.relationships:
+        _openRelationships(category);
+      case CategoryAction.rename:
+        await _showCategoryDialog(category: category);
+      case CategoryAction.delete:
+        await _deleteCategory(category);
+    }
+  }
+
+  void _onMenuSelected(_HomeAction action) {
+    switch (action) {
+      case _HomeAction.theme:
+        ThemeSelectorSheet.show(context);
+      case _HomeAction.importFolder:
+        _importMusicFolder();
+      case _HomeAction.rescan:
+        _rescanMusicLibrary();
+      case _HomeAction.refresh:
+        _loadCategories(showProgress: true);
+    }
+  }
+
+  String get _headerSubtitle {
+    if (_loading) return 'Loading your library...';
+
+    final total = _songCounts.values.fold<int>(0, (sum, n) => sum + n);
+    final categories = _categories.length == 1
+        ? '1 category'
+        : '${_categories.length} categories';
+
+    return '$categories \u00b7 ${songCountLabel(total)}';
+  }
+
+  Widget _buildEmptyState(ThemeData theme) {
+    return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          Icon(
+                            Icons.library_music_outlined,
+                            size: 72,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(height: 20),
                           Text(
-                            'Your Music Categories',
+                            'No categories found',
                             style: theme.textTheme.titleLarge,
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 8),
                           Text(
-                            '${_categories.length} categories available',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
+                            'Import your music folder to get started.',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 20),
+                          FilledButton.icon(
+                            onPressed: _importMusicFolder,
+                            icon: const Icon(Icons.folder_open),
+                            label: const Text('Import Music'),
                           ),
                         ],
                       ),
                     ),
-                    ..._categories.map((category) {
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        clipBehavior: Clip.antiAlias,
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          leading: CircleAvatar(
-                            radius: 25,
-                            backgroundColor:
-                                theme.colorScheme.primaryContainer,
-                            child: Icon(
-                              _categoryIcon(category),
-                              color: theme.colorScheme.onPrimaryContainer,
-                            ),
-                          ),
-                          title: Text(
-                            category.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              _categoryDescription(category),
-                            ),
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => CategorySongsScreen(
-                                  category: category,
-                                ),
-                              ),
-                            );
-                          },
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: 'Manage Relationships',
-                                icon: const Icon(
-                                  Icons.account_tree_rounded,
-                                ),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          CategoryRelationshipsScreen(
-                                        category: category,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              if (category.canModify)
-                                PopupMenuButton<String>(
-                                  tooltip: 'Category options',
-                                  onSelected: (value) {
-                                    if (value == 'rename') {
-                                      _showCategoryDialog(
-                                        category: category,
-                                      );
-                                    } else if (value == 'delete') {
-                                      _deleteCategory(category);
-                                    }
-                                  },
-                                  itemBuilder: (context) => const [
-                                    PopupMenuItem(
-                                      value: 'rename',
-                                      child: ListTile(
-                                        leading: Icon(Icons.edit_outlined),
-                                        title: Text('Rename'),
-                                        contentPadding: EdgeInsets.zero,
-                                      ),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'delete',
-                                      child: ListTile(
-                                        leading: Icon(Icons.delete_outline),
-                                        title: Text('Delete'),
-                                        contentPadding: EdgeInsets.zero,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              else
-                                const Padding(
-                                  padding: EdgeInsets.all(12),
-                                  child: Icon(Icons.lock_outline),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-      bottomNavigationBar: const MiniPlayer(),
     );
   }
-}
 
+  Widget _buildCategoryGrid(double textScale) {
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      sliver: SliverLayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.crossAxisExtent;
 
-class CategorySongsScreen extends StatefulWidget {
-  final Category category;
+          var columns = width >= 760 ? 4 : (width >= 520 ? 3 : 2);
 
-  const CategorySongsScreen({
-    super.key,
-    required this.category,
-  });
+          // At very large text sizes two narrow columns would clip names.
+          if (textScale > 1.8 && columns == 2) columns = 1;
 
-  @override
-  State<CategorySongsScreen> createState() =>
-      _CategorySongsScreenState();
-}
+          return SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              // Card height follows the text size, so larger text never
+              // overflows the card.
+              mainAxisExtent: 76 + 64 * textScale,
+            ),
+            // Built lazily, so a large library only builds what is on screen.
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final category = _categories[index];
 
-class _CategorySongsScreenState
-    extends State<CategorySongsScreen> {
-  final SongRepository _songRepository = SongRepository();
-  final CategoryRepository _categoryRepository =
-      CategoryRepository();
-
-  List<Song> _songs = [];
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSongs();
-  }
-
-  Future<void> _loadSongs() async {
-    try {
-      final songs = await _songRepository
-          .getSongsByCategory(widget.category.id!);
-
-      if (!mounted) return;
-
-      setState(() {
-        _songs = songs;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() => _loading = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load songs: $e')),
-      );
-    }
-  }
-
-  Future<void> _playSong(Song song) async {
-    try {
-      await playbackHandlerInstance.playCategorySong(song);
-
-      if (!mounted) return;
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const NowPlayingScreen(),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Playback failed: $e')),
-      );
-    }
-  }
-
-  Future<void> _showCategorySelector(Song song) async {
-    final categories =
-        await _categoryRepository.getAllCategories();
-
-    if (!mounted) return;
-
-    final selectedCategoryId = await showDialog<int>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text('Move "${song.title}" to'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: categories.length,
-              itemBuilder: (context, index) {
-                final category = categories[index];
-
-                return ListTile(
-                  title: Text(category.name),
-                  onTap: () {
-                    Navigator.pop(
-                      dialogContext,
-                      category.id,
-                    );
-                  },
+                return CategoryCard(
+                  category: category,
+                  songCount: _songCounts[category.id] ?? 0,
+                  onTap: () => _openSongs(category),
+                  onMore: () => _showCategoryActions(category),
                 );
               },
+              childCount: _categories.length,
+            ),
+      );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAllSongsRow() {
+    final scheme = Theme.of(context).colorScheme;
+    final total = _songCounts.values.fold<int>(0, (sum, n) => sum + n);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+      child: Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 6,
+          ),
+                    leading: CircleAvatar(
+            backgroundColor: scheme.primaryContainer,
+                      child: Icon(
+              Icons.library_music_rounded,
+              color: scheme.onPrimaryContainer,
             ),
           ),
-        );
-      },
-    );
-
-    if (!mounted || selectedCategoryId == null) return;
-
-    try {
-      await _songRepository.assignCategory(
-        song.id!,
-        selectedCategoryId,
-      );
-
-      await _loadSongs();
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Song category updated'),
+          title: const Text('All Songs'),
+          subtitle: Text(songCountLabel(total)),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: _openAllSongs,
         ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update category: $e')),
-      );
-    }
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final rawScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    final textScale = rawScale < 1 ? 1.0 : rawScale;
+    final headerExtra = (textScale - 1).clamp(0.0, 1.0).toDouble();
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.category.name),
-        actions: [
-          IconButton(
-            onPressed: _loadSongs,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Add category',
+        onPressed: () => _showCategoryDialog(),
+        child: const Icon(Icons.add_rounded),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _songs.isEmpty
-              ? const Center(
-                  child: Text('No songs in this category'),
-                )
-              : ListView.builder(
-                  itemCount: _songs.length,
-                  itemBuilder: (context, index) {
-                    final song = _songs[index];
-
-                    return ListTile(
-                      leading: ArtworkImage(
-                        artworkPath: song.artworkPath,
-                        size: 48,
-                        borderRadius: 8,
+      body: Stack(
+                  children: [
+          Positioned.fill(
+            child: CustomScrollView(
+              slivers: [
+                SliverAppBar(
+                  pinned: true,
+                  expandedHeight: 196 + 64 * headerExtra,
+                  title: Text(
+                    'Soul King',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  actions: [
+                    IconButton(
+                      tooltip: 'Search songs',
+                      icon: const Icon(Icons.search_rounded),
+                      onPressed: () => _openAllSongs(focusSearch: true),
+                    ),
+                    PopupMenuButton<_HomeAction>(
+                      tooltip: 'More options',
+                      onSelected: _onMenuSelected,
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: _HomeAction.theme,
+                          child: ListTile(
+                            leading: Icon(Icons.brightness_6_rounded),
+                            title: Text('Theme'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        const PopupMenuDivider(),
+                        PopupMenuItem(
+                          value: _HomeAction.importFolder,
+                          enabled: !_isScanning,
+                          child: ListTile(
+                            enabled: !_isScanning,
+                            leading: const Icon(Icons.folder_open_rounded),
+                            title: const Text('Import music folder'),
+                            contentPadding: EdgeInsets.zero,
+                            ),
+                        ),
+                        PopupMenuItem(
+                          value: _HomeAction.rescan,
+                          enabled: !_isScanning,
+                          child: ListTile(
+                            enabled: !_isScanning,
+                            leading: const Icon(Icons.sync_rounded),
+                            title: const Text('Rescan library'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: _HomeAction.refresh,
+                          enabled: !_isScanning && !_refreshing,
+                          child: ListTile(
+                            enabled: !_isScanning && !_refreshing,
+                            leading: const Icon(Icons.refresh_rounded),
+                            title: const Text('Refresh categories'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
                       ),
-                      title: Text(song.title),
-                      subtitle: Text(
-                        song.artist ?? 'Unknown Artist',
-                      ),
-                      onTap: () => _playSong(song),
-                      trailing: IconButton(
-                        tooltip: 'Change category',
-                        icon: const Icon(Icons.drive_file_move),
-                        onPressed: () =>
-                            _showCategorySelector(song),
-                      ),
-                    );
-                  },
+                      ],
+                    ),
+                  ],
+                  bottom: PreferredSize(
+                    preferredSize: const Size.fromHeight(2),
+                    child: _refreshing
+                        ? const LinearProgressIndicator(minHeight: 2)
+                        : const SizedBox(height: 2),
+                  ),
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: SoulHeader(
+                      subtitle: _headerSubtitle,
+                      showTagline: textScale <= 1.3,
+                    ),
+                  ),
                 ),
-                bottomNavigationBar: const MiniPlayer(),
-    );
-  }
-}
-
-class _CategoryNameDialog extends StatefulWidget {
-  final String initialName;
-  final bool isEditing;
-
-  const _CategoryNameDialog({
-    required this.initialName,
-    required this.isEditing,
-  });
-
-  @override
-  State<_CategoryNameDialog> createState() =>
-      _CategoryNameDialogState();
-}
-
-class _CategoryNameDialogState
-    extends State<_CategoryNameDialog> {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(
-      text: widget.initialName,
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(
-        widget.isEditing ? 'Rename Category' : 'Create Category',
-      ),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        maxLength: 40,
-        decoration: const InputDecoration(
-          labelText: 'Category name',
-          hintText: 'Enter category name',
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(
-            context,
-            _controller.text.trim(),
+                if (_loading)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_categories.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _buildEmptyState(theme),
+                  )
+                else ...[
+                  _buildCategoryGrid(textScale),
+                  SliverToBoxAdapter(child: _buildAllSongsRow()),
+                ],
+              ],
+            ),
           ),
-          child: Text(widget.isEditing ? 'Save' : 'Create'),
-        ),
+
+          // Covers the content below the toolbar, so the toolbar actions (for
+          // example Theme) stay usable while a scan is running.
+          if (_isScanning)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              top: MediaQuery.paddingOf(context).top + kToolbarHeight,
+              child: ScanOverlay(progress: _scanProgress),
+          ),
       ],
+      ),
+      bottomNavigationBar: const MiniPlayer(),
     );
   }
 }

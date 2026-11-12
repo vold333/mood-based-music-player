@@ -30,7 +30,10 @@ class LibraryScannerService {
 
   // Opens the Android folder picker and scans the selected folder.
   // Returns null if the user cancels the picker.
-  Future<int?> pickAndScanLibrary() async {
+  Future<int?> pickAndScanLibrary({
+    void Function(int scannedCount)? onProgress,
+  }) async {
+  
     final directory = await _saf.pickDirectory();
 
     if (directory == null) {
@@ -58,7 +61,10 @@ class LibraryScannerService {
       readablePermissions.first.uri,
     );
 
-    return scanDirectory(directory.uri);
+    return scanDirectory(
+      directory.uri,
+      onProgress: onProgress,
+    );  
   }
 
   // Returns the previously selected folder if permission is still available.
@@ -87,26 +93,38 @@ class LibraryScannerService {
   }
 
   // Rescans the previously selected folder.
-  Future<int?> rescanSavedLibrary() async {
+  Future<int?> rescanSavedLibrary({
+      void Function(int scannedCount)? onProgress,
+  }) async {
     final directoryUri = await getSavedLibraryUri();
 
     if (directoryUri == null) {
       return null;
     }
 
-    return scanDirectory(directoryUri);
+    return scanDirectory(directoryUri,   onProgress: onProgress);
   }
 
   // Recursively scans a selected directory.
   
-  Future<int> scanDirectory(String directoryUri) async {
+    Future<int> scanDirectory(
+    String directoryUri, {
+    void Function(int scannedCount)? onProgress,
+  }) async {
     int scannedCount = 0;
+    int fileIndex = 0;
+
+    // Tracks every supported file found, including files whose
+    // metadata temporarily fails to load.
+    final existingUris = <String>{};
 
     final tempDir = await Directory.systemTemp.createTemp(
       'mood_music_metadata_',
     );
 
     try {
+      onProgress?.call(0);
+
       await for (final entry in _saf.walk(directoryUri)) {
         final file = entry.file;
 
@@ -118,25 +136,28 @@ class LibraryScannerService {
           continue;
         }
 
-        try {
-          final localPath = p.join(
-            tempDir.path,
-            'audio_$scannedCount$extension',
-          );
+        // Record before processing so a metadata error doesn't
+        // cause an existing database record to be deleted.
+        existingUris.add(file.uri);
 
+        final localPath = p.join(
+          tempDir.path,
+          'audio_$fileIndex$extension',
+        );
+
+        fileIndex++;
+
+        try {
           await _saf.copyToLocalFile(file.uri, localPath);
 
-          // Read basic metadata without extracting artwork.
           final metadata = readMetadata(
             File(localPath),
             getImage: false,
           );
 
-          // Reuse cached artwork whenever possible.
           String? artworkPath =
               await _artworkService.getCachedArtworkPath(file.uri);
 
-          // Extract embedded artwork only when cache is unavailable.
           if (artworkPath == null) {
             final artworkMetadata = readMetadata(
               File(localPath),
@@ -178,8 +199,20 @@ class LibraryScannerService {
           print('Scanned: ${song.title}');
         } catch (e) {
           print('Failed to scan ${file.name}: $e');
+        } finally {
+          // Release temporary storage immediately after this file.
+          final tempFile = File(localPath);
+
+          if (await tempFile.exists()) {
+            await tempFile.delete();
+          }
         }
+
+        onProgress?.call(scannedCount);
       }
+
+      // Reached only if the complete folder traversal succeeded.
+      await _songRepository.deleteSongsNotInUris(existingUris);
     } finally {
       await tempDir.delete(recursive: true);
     }

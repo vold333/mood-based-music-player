@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Soul King launch background (Ocean Night). Used while the app starts,
+         before Flutter draws the first frame. -->
+    <color name="soul_launch_background">#0B0F1A</color>
+</resources>
