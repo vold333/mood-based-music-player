@@ -1,93 +1,107 @@
-
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_palette.dart';
-import '../../app/theme/soul_tokens.dart';
+import '../../core/constants/soul_assets.dart';
 
-/// A parchment banner for the top of a category: type badge, name, song count
-/// and an optional Play button.
-///
-/// Parchment is the same colour in both themes, so the ink on it is too (the
-/// Day palette's text colour, 10:1 on parchment). Parchment is for banners
-/// only, never for list rows.
+/// Grand Line parchment banner for a category's title, artwork and play action.
 class ParchmentBanner extends StatelessWidget {
   const ParchmentBanner({
     super.key,
-    required this.icon,
+    required this.artworkAsset,
     required this.title,
     required this.subtitle,
     this.onPlay,
     this.playTooltip = 'Play',
   });
 
-  final IconData icon;
+  final String artworkAsset;
   final String title;
   final String subtitle;
-
-  /// When null, the Play button is hidden.
   final VoidCallback? onPlay;
   final String playTooltip;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final soul = context.soul;
     final ink = AppPalette.day.onSurface;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: soul.parchment,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: soul.gold.withValues(alpha: 0.7),
-          width: 1.5,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 112),
+        decoration: BoxDecoration(
+          color: AppPalette.day.parchment,
+          border: Border.all(
+            color: AppPalette.day.gold.withValues(alpha: 0.85),
+            width: 1.2,
+          ),
+          borderRadius: BorderRadius.circular(18),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-        child: Row(
+        child: Stack(
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: ink.withValues(alpha: 0.10),
+            Positioned.fill(
+              child: Image.asset(
+                SoulAssets.categoryBanner,
+                fit: BoxFit.fill,
+                errorBuilder: (_, __, ___) =>
+                    const SizedBox.expand(),
               ),
-              child: Icon(icon, color: ink),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 14, 14, 14),
+              child: Row(
                 children: [
-                  Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: ink,
-                      fontWeight: FontWeight.bold,
+                  SizedBox(
+                    width: 64,
+                    height: 68,
+                    child: Image.asset(
+                      artworkAsset,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Icon(
+                        Icons.library_music_rounded,
+                        size: 42,
+                        color: ink,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: ink.withValues(alpha: 0.78),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: ink,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: ink.withValues(alpha: 0.82),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  if (onPlay != null) ...[
+                    const SizedBox(width: 6),
+                    IconButton.filled(
+                      tooltip: playTooltip,
+                      iconSize: 28,
+                      onPressed: onPlay,
+                      icon: const Icon(Icons.play_arrow_rounded),
+                    ),
+                  ],
                 ],
               ),
             ),
-            if (onPlay != null)
-              IconButton.filled(
-                tooltip: playTooltip,
-                iconSize: 30,
-                onPressed: onPlay,
-                icon: const Icon(Icons.play_arrow_rounded),
-              ),
           ],
         ),
       ),

@@ -7,6 +7,7 @@ import '../../data/models/category.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/song_repository.dart';
+import '../../core/constants/soul_assets.dart';
 import '../../shared/widgets/bulk_category_picker.dart';
 import '../player/now_playing_screen.dart';
 import '../../shared/widgets/artwork_image.dart';
@@ -287,20 +288,22 @@ class _CategorySongsScreenState extends State<CategorySongsScreen> {
     final theme = Theme.of(context);
 
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.music_off_rounded,
-              size: 64,
-              color: theme.colorScheme.primary,
+            Image.asset(
+              SoulAssets.emptyCategory,
+              width: 230,
+              height: 220,
+              fit: BoxFit.contain,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
               'No songs in this category',
               style: theme.textTheme.titleMedium,
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
@@ -366,7 +369,8 @@ class _CategorySongsScreenState extends State<CategorySongsScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                       child: ParchmentBanner(
-                        icon: categoryIcon(widget.category),
+                        artworkAsset:
+                            SoulAssets.artworkForCategory(widget.category),
                         title: widget.category.name,
                         subtitle: songCountLabel(_songs.length),
                         playTooltip: 'Play category',
@@ -375,14 +379,24 @@ class _CategorySongsScreenState extends State<CategorySongsScreen> {
                     ),
                     Expanded(
                       child: ListView.separated(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        itemCount: _songs.length,
+                        padding: const EdgeInsets.only(bottom: 0),
+                        itemCount: _songs.length + 1,
                         separatorBuilder: (_, __) =>
                             const Divider(
                           height: 1,
                           indent: 82,
                         ),
                         itemBuilder: (context, index) {
+                          if (index == _songs.length) {
+                            return Image.asset(
+                              SoulAssets.categoryBottomIsland,
+                              width: double.infinity,
+                              height: 126,
+                              fit: BoxFit.cover,
+                              alignment: Alignment.topCenter,
+                            );
+                          }
+
                           final song = _songs[index];
 
                           return ListTile(

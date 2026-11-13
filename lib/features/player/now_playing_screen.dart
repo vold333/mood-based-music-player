@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
 import '../../shared/widgets/artwork_hero.dart';
 import '../../shared/widgets/status_pill.dart';
-import '../../shared/widgets/wave_strip.dart';
+import '../../core/constants/soul_assets.dart';
 import 'playback_handler.dart';
 
 class NowPlayingScreen extends StatelessWidget {
@@ -295,7 +295,13 @@ class NowPlayingScreen extends StatelessWidget {
                 ),
             ),
 
-              const WaveStrip(),
+              Image.asset(
+                SoulAssets.oceanWave,
+                width: double.infinity,
+                height: 74,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+              ),
             ],
           );
         },

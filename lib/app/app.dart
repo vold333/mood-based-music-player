@@ -1,8 +1,8 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../features/categories/category_screen.dart';
+
 import '../data/services/library_scanner_service.dart';
+import '../features/splash_screen.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
 
@@ -11,22 +11,20 @@ class MoodMusicApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Only the theme is re-resolved when the choice changes. The navigator,
-    // screens, playback and any running scan keep their state.
     return ListenableBuilder(
       listenable: themeController,
       builder: (context, _) {
-    return MaterialApp(
+        return MaterialApp(
           title: 'Soul King',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.day,
-      darkTheme: AppTheme.night,
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.day,
+          darkTheme: AppTheme.night,
           themeMode: themeController.mode,
           builder: (context, child) => _SystemBarsStyle(
             child: child ?? const SizedBox.shrink(),
           ),
-      home: const CategoryScreen(),
-    );
+          home: const SoulSplashScreen(),
+        );
       },
     );
   }
@@ -63,13 +61,11 @@ class LibrarySetupScreen extends StatefulWidget {
   const LibrarySetupScreen({super.key});
 
   @override
-  State<LibrarySetupScreen> createState() =>
-      _LibrarySetupScreenState();
+  State<LibrarySetupScreen> createState() => _LibrarySetupScreenState();
 }
 
 class _LibrarySetupScreenState extends State<LibrarySetupScreen> {
-  final LibraryScannerService _scannerService =
-      LibraryScannerService();
+  final LibraryScannerService _scannerService = LibraryScannerService();
 
   String _status = 'No music folder selected';
   bool _loading = false;
@@ -81,8 +77,7 @@ class _LibrarySetupScreenState extends State<LibrarySetupScreen> {
     });
 
     try {
-      final scannedCount =
-          await _scannerService.pickAndScanLibrary();
+      final scannedCount = await _scannerService.pickAndScanLibrary();
 
       if (!mounted) return;
 
@@ -94,8 +89,7 @@ class _LibrarySetupScreenState extends State<LibrarySetupScreen> {
       }
 
       setState(() {
-        _status = 'Scan completed!\n'
-            'Songs saved: $scannedCount';
+        _status = 'Scan completed!\nSongs saved: $scannedCount';
       });
     } catch (e) {
       if (!mounted) return;

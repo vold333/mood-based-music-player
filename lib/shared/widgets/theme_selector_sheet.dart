@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme/soul_tokens.dart';
 import '../../app/theme/theme_controller.dart';
 
-/// Bottom sheet for choosing Night, Day or System theme.
+/// Theme selector. Only Grand Line Day is currently available.
 ///
 /// A choice applies and is saved immediately, and the sheet stays open so the
 /// themes can be compared live.
@@ -35,13 +35,15 @@ class ThemeSelectorSheet extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
                 child: Text('Theme', style: theme.textTheme.titleLarge),
               ),
-              _ThemeOptionTile(
-                mode: ThemeMode.dark,
-                icon: Icons.dark_mode_rounded,
-                title: 'Night – Soul King',
-                subtitle: 'Dark ocean, midnight navy and Soul Purple',
-                selected: current == ThemeMode.dark,
-              ),
+              // Temporarily disabled while the Grand Line Day Theme is the
+              // active design target. Keep this option for the Midnight return.
+              // _ThemeOptionTile(
+              //   mode: ThemeMode.dark,
+              //   icon: Icons.dark_mode_rounded,
+              //   title: 'Night – Soul King',
+              //   subtitle: 'Dark ocean, midnight navy and Soul Purple',
+              //   selected: current == ThemeMode.dark,
+              // ),
               _ThemeOptionTile(
                 mode: ThemeMode.light,
                 icon: Icons.light_mode_rounded,
@@ -49,13 +51,8 @@ class ThemeSelectorSheet extends StatelessWidget {
                 subtitle: 'Sunny sky, ocean blue and warm ivory',
                 selected: current == ThemeMode.light,
               ),
-              _ThemeOptionTile(
-                mode: ThemeMode.system,
-                icon: Icons.brightness_auto_rounded,
-                title: 'System Default',
-                subtitle: 'Follow the phone setting',
-                selected: current == ThemeMode.system,
-              ),
+              // System Default is also paused so the OS cannot switch the app
+              // back to the unfinished Night experience.
               const SizedBox(height: 8),
             ],
           );

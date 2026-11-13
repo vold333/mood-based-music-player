@@ -2,13 +2,13 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/soul_tokens.dart';
+import '../../core/constants/soul_assets.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/song_repository.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../shared/widgets/mini_player.dart';
 import '../../shared/widgets/song_tile.dart';
 import '../../shared/widgets/soul_choice_chip.dart';
-import '../../shared/widgets/wave_strip.dart';
 import '../../shared/widgets/bulk_category_picker.dart';
 import '../player/playback_handler.dart';
 import '../player/now_playing_screen.dart';
@@ -363,6 +363,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
     required IconData icon,
     required String title,
     required String subtitle,
+    String? illustrationAsset,
     Widget? action,
   }) {
     final theme = Theme.of(context);
@@ -374,6 +375,14 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (illustrationAsset != null)
+              Image.asset(
+                illustrationAsset,
+                width: 220,
+                height: 210,
+                fit: BoxFit.contain,
+              )
+            else
             Container(
               width: 88,
               height: 88,
@@ -427,9 +436,15 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
       ),
       itemBuilder: (context, index) {
         if (index == songs.length) {
-          return const Padding(
-            padding: EdgeInsets.only(top: 16),
-            child: WaveStrip(height: 56),
+          return Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Image.asset(
+              SoulAssets.categoryBottomIsland,
+              width: double.infinity,
+              height: 112,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+            ),
           );
         }
 
@@ -504,6 +519,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                   title: 'Your library is empty',
                   subtitle:
                       'Import a music folder to discover your songs.',
+                  illustrationAsset: SoulAssets.emptyLibrary,
                 )
               : Column(
                   children: [
@@ -533,6 +549,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                               title: 'No matching songs',
                               subtitle:
                                   'Try another song, artist or album name.',
+                              illustrationAsset: SoulAssets.noSearchResults,
                               action: FilledButton.tonal(
                                 onPressed: _searchController.clear,
                                 child: const Text('Clear search'),

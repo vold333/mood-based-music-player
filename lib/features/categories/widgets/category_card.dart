@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../data/models/category.dart';
+import '../../../core/constants/soul_assets.dart';
 
 /// Icon for a category by type: system, custom or music genre.
 IconData categoryIcon(Category category) {
@@ -52,12 +53,18 @@ class CategoryCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: scheme.primaryContainer,
-                    child: Icon(
+                  SizedBox(
+                    width: 62,
+                    height: 54,
+                    child: Image.asset(
+                      SoulAssets.artworkForCategory(category),
+                      fit: BoxFit.contain,
+                      semanticLabel: '${category.name} illustration',
+                      errorBuilder: (_, __, ___) => Icon(
                       categoryIcon(category),
-                      color: scheme.onPrimaryContainer,
+                        color: scheme.primary,
+                        size: 34,
+                      ),
                     ),
                   ),
                   const Spacer(),

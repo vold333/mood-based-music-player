@@ -1,13 +1,8 @@
-
 import 'package:flutter/material.dart';
 
-import '../../../shared/widgets/wave_strip.dart';
+import '../../../core/constants/soul_assets.dart';
 
-/// Expanded background of the Home app bar: a theme-coloured sky fading into
-/// the page, a static wave band, and the "Music Islands" title block.
-///
-/// Drawn entirely from the active theme, so Night and Day share this widget.
-/// The text sits above the waves and never over them.
+/// Grand Line scenic header used by the Home screen.
 class SoulHeader extends StatelessWidget {
   const SoulHeader({
     super.key,
@@ -26,52 +21,92 @@ class SoulHeader extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
+        Image.asset(
+          SoulAssets.homeHeader,
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          errorBuilder: (_, __, ___) => DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [scheme.primaryContainer, scheme.surface],
+              ),
+            ),
+          ),
+        ),
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [scheme.primaryContainer, scheme.surface],
+              colors: [
+                Colors.white.withValues(alpha: 0.02),
+                scheme.surface.withValues(alpha: 0.08),
+                scheme.surface.withValues(alpha: 0.52),
+              ],
+              stops: const [0, 0.52, 1],
             ),
           ),
         ),
-        const Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: WaveStrip(height: 56),
-        ),
         Positioned(
-          left: 20,
-          right: 20,
-          bottom: 60,
+          left: 16,
+          right: 16,
+          bottom: 8,
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Semantics(
-                header: true,
-                child: Text(
-                  'Music Islands',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4E3C1).withValues(alpha: 0.94),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFFD9A441),
+                    width: 1.2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    'Music Islands',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: const Color(0xFF12354F),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
               if (showTagline) ...[
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   'Your music, across the Grand Line.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],

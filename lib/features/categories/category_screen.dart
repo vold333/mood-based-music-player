@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import '../../data/models/category.dart';
+import '../../core/constants/soul_assets.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/services/library_scanner_service.dart';
 import '../../shared/widgets/mini_player.dart';
@@ -322,16 +323,17 @@ class _CategoryScreenState extends State<CategoryScreen> {
   Widget _buildEmptyState(ThemeData theme) {
     return Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(28),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.library_music_outlined,
-                            size: 72,
-                            color: theme.colorScheme.primary,
+            Image.asset(
+              SoulAssets.emptyLibrary,
+              width: 230,
+              height: 220,
+              fit: BoxFit.contain,
                           ),
-                          const SizedBox(height: 20),
+            const SizedBox(height: 16),
                           Text(
                             'No categories found',
                             style: theme.textTheme.titleLarge,
