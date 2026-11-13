@@ -4,12 +4,14 @@ class Category {
   final String name;
   final bool isDefault;
   final String source;
+  final int? illustrationIndex;
 
   const Category({
     this.id,
     required this.name,
     this.isDefault = false,
     this.source = 'genre',
+    this.illustrationIndex,
   });
 
   // Convert database Map into Category object.
@@ -19,6 +21,7 @@ class Category {
       name: map['name'] as String,
       isDefault: map['is_default'] == 1,
       source: map['source'] as String,
+      illustrationIndex: map['illustration_index'] as int?,
     );
   }
 
@@ -29,6 +32,7 @@ class Category {
       'name': name,
       'is_default': isDefault ? 1 : 0,
       'source': source,
+      'illustration_index': illustrationIndex,
     };
   }
 
@@ -40,12 +44,14 @@ class Category {
     String? name,
     bool? isDefault,
     String? source,
+    int? illustrationIndex,
   }) {
     return Category(
       id: id ?? this.id,
       name: name ?? this.name,
       isDefault: isDefault ?? this.isDefault,
       source: source ?? this.source,
+      illustrationIndex: illustrationIndex ?? this.illustrationIndex,
     );
   }
 }

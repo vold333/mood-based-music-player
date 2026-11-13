@@ -1,5 +1,6 @@
-
 import 'package:flutter/material.dart';
+
+import '../../app/theme/glass_tokens.dart';
 
 /// A single-choice chip in the Soul King style, used for sort options and
 /// priority choices.
@@ -32,6 +33,12 @@ class SoulChoiceChip extends StatelessWidget {
       selected: selected,
       onSelected: (_) => onSelected(),
       showCheckmark: true,
+      // Glass pill: a light translucent fill that turns Soul Purple tinted
+      // when selected. The tick still marks the choice, not colour alone.
+      backgroundColor: context.glass.fillStrong,
+      elevation: 0,
+      pressElevation: 0,
+      shape: const StadiumBorder(),
       selectedColor: scheme.primaryContainer,
       checkmarkColor: scheme.onPrimaryContainer,
       labelStyle: theme.textTheme.labelLarge?.copyWith(

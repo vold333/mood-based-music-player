@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/soul_tokens.dart';
 import '../../../data/models/category.dart';
 import '../../../data/models/category_relationship.dart';
+import '../../../shared/widgets/glass_icon_badge.dart';
+import '../../../shared/widgets/glass_input.dart';
 import '../../../shared/widgets/soul_choice_chip.dart';
 import 'category_card.dart';
 
@@ -102,17 +104,12 @@ class _RelationshipEditorSheetState extends State<RelationshipEditorSheet> {
   }
 
   Widget _buildTargetSummary(String targetName) {
-    final scheme = Theme.of(context).colorScheme;
-
     return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: scheme.primaryContainer,
-        child: Icon(
-          widget.target != null
-              ? categoryIcon(widget.target!)
-              : Icons.library_music_rounded,
-          color: scheme.onPrimaryContainer,
-        ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+      leading: GlassIconBadge(
+        icon: widget.target != null
+            ? categoryIcon(widget.target!)
+            : Icons.library_music_rounded,
       ),
       title: Text(
         targetName,
@@ -135,9 +132,10 @@ class _RelationshipEditorSheetState extends State<RelationshipEditorSheet> {
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
           child: TextField(
-            decoration: const InputDecoration(
+            decoration: glassFieldDecoration(
+              context,
               hintText: 'Filter categories',
-              prefixIcon: Icon(Icons.search_rounded),
+              prefixIcon: const Icon(Icons.search_rounded),
               isDense: true,
             ),
             onChanged: (value) => setState(() => _filter = value),
@@ -151,13 +149,20 @@ class _RelationshipEditorSheetState extends State<RelationshipEditorSheet> {
               )
             : ListView.builder(
                 shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 itemCount: targets.length,
                 itemBuilder: (context, index) {
                   final category = targets[index];
                   final selected = category.id == _selectedId;
 
                   return ListTile(
-                    leading: Icon(categoryIcon(category)),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(16)),
+                    ),
+                    leading: GlassIconBadge(
+                      icon: categoryIcon(category),
+                      size: 36,
+                    ),
                     title: Text(
                       category.name,
                       maxLines: 2,
@@ -294,7 +299,7 @@ class _RelationshipEditorSheetState extends State<RelationshipEditorSheet> {
                 child: Text(
                   _isEditing ? 'Change priority' : 'Add related category',
                   style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),

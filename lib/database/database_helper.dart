@@ -22,7 +22,7 @@ class DatabaseHelper {
 
     return openDatabase(
       path,
-      version: 4,
+      version: 5,
 
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
@@ -48,6 +48,32 @@ class DatabaseHelper {
             ADD COLUMN artwork_path TEXT
           ''');
         }
+
+        if (oldVersion < 5) {
+          await db.execute('''
+            ALTER TABLE categories
+            ADD COLUMN illustration_index INTEGER
+          ''');
+
+          // Assign illustrations in category creation order. Uncategorized
+          // keeps its fixed Marine emblem and is excluded from the cycle.
+          final categories = await db.query(
+            'categories',
+            columns: ['id'],
+            where: 'is_default = ?',
+            whereArgs: [0],
+            orderBy: 'id ASC',
+          );
+
+          for (var index = 0; index < categories.length; index++) {
+            await db.update(
+              'categories',
+              {'illustration_index': index % 8},
+              where: 'id = ?',
+              whereArgs: [categories[index]['id']],
+            );
+          }
+        }
       },
     );
   }
@@ -58,7 +84,8 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL COLLATE NOCASE UNIQUE,
         is_default INTEGER NOT NULL DEFAULT 0,
-        source TEXT NOT NULL DEFAULT 'genre'
+        source TEXT NOT NULL DEFAULT 'genre',
+        illustration_index INTEGER
       )
     ''');
 

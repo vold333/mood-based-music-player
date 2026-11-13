@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../../app/theme/soul_tokens.dart';
@@ -69,6 +68,10 @@ class SongTile extends StatelessWidget {
         onTap: onTap,
         onLongPress: onLongPress,
         selected: selected,
+        // Selected rows get a soft Soul Purple wash with high-contrast text.
+        selectedTileColor: scheme.primaryContainer.withValues(alpha: 0.55),
+        selectedColor: scheme.onPrimaryContainer,
+        shape: const RoundedRectangleBorder(),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 6,
@@ -90,7 +93,7 @@ class SongTile extends StatelessWidget {
             ArtworkImage(
           artworkPath: song.artworkPath,
           size: 52,
-          borderRadius: 10,
+          borderRadius: 14,
         ),
           ],
         ),
@@ -98,6 +101,9 @@ class SongTile extends StatelessWidget {
           song.title,
           maxLines: scale > 1.3 ? 2 : 1,
           overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

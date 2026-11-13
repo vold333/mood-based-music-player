@@ -110,7 +110,7 @@ class _LibrarySetupScreenState extends State<LibrarySetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mood Music Player'),
+        title: const Text('Soul King Player'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),

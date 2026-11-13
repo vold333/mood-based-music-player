@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../../app/theme/soul_tokens.dart';
@@ -6,6 +5,7 @@ import '../../core/constants/soul_assets.dart';
 import '../../data/models/song.dart';
 import '../../data/repositories/song_repository.dart';
 import '../../data/repositories/category_repository.dart';
+import '../../shared/widgets/glass_surface.dart';
 import '../../shared/widgets/mini_player.dart';
 import '../../shared/widgets/song_tile.dart';
 import '../../shared/widgets/soul_choice_chip.dart';
@@ -299,37 +299,46 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
   }
 
   Widget _buildSearchField() {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
-    return TextField(
-      controller: _searchController,
-      autofocus: widget.autofocusSearch,
-      textInputAction: TextInputAction.search,
-      autocorrect: false,
-      onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-      decoration: InputDecoration(
-        hintText: 'Search songs, artists, albums...',
-        prefixIcon: const Icon(Icons.search_rounded),
-        suffixIcon: _hasText
-            ? IconButton(
-                tooltip: 'Clear search',
-                icon: const Icon(Icons.close_rounded),
-                onPressed: _searchController.clear,
-              )
-            : null,
-        filled: true,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: scheme.outline),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: context.soul.accentText,
-            width: 2,
+    // The glass pill supplies the fill and rim; the field itself is clear and
+    // only draws a clear accent outline while focused.
+    return GlassSurface(
+      radius: 20,
+      child: TextField(
+        controller: _searchController,
+        autofocus: widget.autofocusSearch,
+        textInputAction: TextInputAction.search,
+        autocorrect: false,
+        onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+        style: theme.textTheme.bodyLarge?.copyWith(color: scheme.onSurface),
+        decoration: InputDecoration(
+          hintText: 'Search songs, artists, albums...',
+          hintStyle: TextStyle(color: scheme.onSurfaceVariant),
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: _hasText
+              ? IconButton(
+                  tooltip: 'Clear search',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: _searchController.clear,
+                )
+              : null,
+          filled: false,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20),
+            borderSide: BorderSide(
+              color: context.soul.accentText,
+              width: 2,
+            ),
           ),
         ),
       ),
@@ -423,50 +432,48 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
   Widget _buildSongList() {
     final songs = _visible;
 
-    return ListView.separated(
-      controller: _scrollController,
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.only(top: 4, bottom: 12),
-      // One extra item for the footer. Rows are built lazily.
-      itemCount: songs.length + 1,
-      separatorBuilder: (_, __) => const Divider(
-        height: 1,
-        indent: 84,
-        endIndent: 16,
-      ),
-      itemBuilder: (context, index) {
-        if (index == songs.length) {
-          return Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Image.asset(
-              SoulAssets.categoryBottomIsland,
-              width: double.infinity,
-              height: 112,
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
+    // One glass panel holds the whole list. Rows are built lazily inside it,
+    // so a large library never builds hundreds of shadowed cards.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+      child: GlassSurface(
+        radius: 28,
+        child: Material(
+          type: MaterialType.transparency,
+          child: ListView.separated(
+            controller: _scrollController,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: songs.length,
+            separatorBuilder: (_, __) => const Divider(
+              height: 1,
+              indent: 84,
+              endIndent: 16,
             ),
-          );
-        }
+            itemBuilder: (context, index) {
+              final song = songs[index].song;
 
-        final song = songs[index].song;
-
-        final selected = song.id != null && _selectedSongIds.contains(song.id);
-        return SongTile(
-          song: song,
-          selectionMode: _selectionMode,
-          selected: selected,
-          onLongPress: () {
-            if (!_selectionMode) _toggleSelection(song);
-          },
-          onTap: () {
-            if (_selectionMode) {
-              _toggleSelection(song);
-            } else {
-              _playSong(song);
-            }
-          },
-        );
-      },
+              final selected =
+                  song.id != null && _selectedSongIds.contains(song.id);
+              return SongTile(
+                song: song,
+                selectionMode: _selectionMode,
+                selected: selected,
+                onLongPress: () {
+                  if (!_selectionMode) _toggleSelection(song);
+                },
+                onTap: () {
+                  if (_selectionMode) {
+                    _toggleSelection(song);
+                  } else {
+                    _playSong(song);
+                  }
+                },
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 
@@ -482,7 +489,10 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                 onPressed: _clearSelection,
                 icon: const Icon(Icons.close_rounded),
               )
-            : null,
+            : IconButton(
+                icon: const Icon(Icons.arrow_back_ios_rounded),
+                onPressed: () => Navigator.pop(context),
+              ),
         title: Text(
           _selectionMode ? '${_selectedSongIds.length} selected' : 'All Songs',
         ),
@@ -511,7 +521,11 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
           ),
         ],
       ),
-      body: _loading
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GrandLineBackdrop()),
+          Positioned.fill(
+            child: _loading
           ? const Center(child: CircularProgressIndicator())
           : _entries.isEmpty
               ? _buildEmptyState(
@@ -559,6 +573,9 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                     ),
                   ],
                 ),
+          ),
+        ],
+      ),
       bottomNavigationBar: const MiniPlayer(),
     );
   }

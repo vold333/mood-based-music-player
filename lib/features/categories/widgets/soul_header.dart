@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/glass_tokens.dart';
 import '../../../core/constants/soul_assets.dart';
+import '../../../shared/widgets/glass_surface.dart';
 
 /// Grand Line scenic header used by the Home screen.
+///
+/// The Going Merry artwork is the Home screen's visual identity and is shown
+/// untouched, apart from a very light shade at the bottom edge. The Soul King
+/// name card is rendered by the SliverAppBar title, separately from this
+/// background, so both can scale independently. A single frosted chip carries
+/// the library summary, and a thin rim of light closes the scene.
 class SoulHeader extends StatelessWidget {
   const SoulHeader({
     super.key,
@@ -10,109 +18,114 @@ class SoulHeader extends StatelessWidget {
     this.showTagline = true,
   });
 
+  /// Library summary, for example "9 categories · 120 songs".
   final String subtitle;
+
+  /// Hides the summary chip at large text sizes, where the header is too short.
   final bool showTagline;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final glass = context.glass;
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Image.asset(
-          SoulAssets.homeHeader,
-          fit: BoxFit.cover,
-          alignment: Alignment.center,
-          errorBuilder: (_, __, ___) => DecoratedBox(
+    return ClipRRect(
+      borderRadius: const BorderRadius.only(
+        bottomLeft: Radius.circular(32),
+        bottomRight: Radius.circular(32),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            SoulAssets.homeHeader,
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+            errorBuilder: (_, __, ___) => DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [glass.skyCyan, glass.oceanBlue],
+                ),
+              ),
+            ),
+          ),
+          // Barely-there shade so the chip and the sea edge stay calm.
+          const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [scheme.primaryContainer, scheme.surface],
+                colors: [
+                  Color(0x000B2540),
+                  Color(0x080B2540),
+                  Color(0x300B2540),
+                ],
+                stops: [0, 0.6, 1],
               ),
             ),
           ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.white.withValues(alpha: 0.02),
-                scheme.surface.withValues(alpha: 0.08),
-                scheme.surface.withValues(alpha: 0.52),
-              ],
-              stops: const [0, 0.52, 1],
-            ),
-          ),
-        ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 8,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 22,
-                  vertical: 5,
-                ),
+          // Rim of light along the bottom edge, like sun on the horizon.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF4E3C1).withValues(alpha: 0.94),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: const Color(0xFFD9A441),
-                    width: 1.2,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(32),
+                    bottomRight: Radius.circular(32),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.12),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Semantics(
-                  header: true,
-                  child: Text(
-                    'Music Islands',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: const Color(0xFF12354F),
-                      fontWeight: FontWeight.w800,
-                    ),
+                  border: Border(
+                    bottom: BorderSide(color: glass.borderSoft, width: 1.5),
                   ),
                 ),
               ),
-              if (showTagline) ...[
-                const SizedBox(height: 3),
-                Text(
-                  'Your music, across the Grand Line.',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurface,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ],
+          if (showTagline)
+            Positioned(
+              left: 16,
+              bottom: 18,
+              right: 16,
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: GlassSurface(
+                  radius: 20,
+                  blur: true,
+                  blurSigma: 12,
+                  shadow: false,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.sailing_rounded,
+                        size: 16,
+                        color: scheme.secondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

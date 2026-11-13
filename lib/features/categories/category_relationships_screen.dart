@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../../app/theme/soul_tokens.dart';
@@ -6,6 +5,7 @@ import '../../data/models/category.dart';
 import '../../data/models/category_relationship.dart';
 import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/category_relationship_repository.dart';
+import '../../shared/widgets/glass_surface.dart';
 import 'widgets/relationship_editor_sheet.dart';
 import 'widgets/relationship_tile.dart';
 
@@ -235,11 +235,10 @@ class _CategoryRelationshipsScreenState
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
+    return GlassSurface(
+      radius: 24,
+      padding: const EdgeInsets.all(16),
+      child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(
@@ -255,7 +254,8 @@ class _CategoryRelationshipsScreenState
                   Text(
                     'Where the music goes next',
                     style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -274,7 +274,6 @@ class _CategoryRelationshipsScreenState
               ),
             ),
           ],
-        ),
       ),
     );
   }
@@ -369,6 +368,10 @@ class _CategoryRelationshipsScreenState
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text('Relationships'),
         actions: [
           IconButton(
@@ -385,7 +388,11 @@ class _CategoryRelationshipsScreenState
               label: const Text('Add related category'),
             )
           : null,
-      body: _loading
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GrandLineBackdrop()),
+          Positioned.fill(
+            child: _loading
           ? const Center(child: CircularProgressIndicator())
           : CustomScrollView(
               slivers: [
@@ -415,7 +422,10 @@ class _CategoryRelationshipsScreenState
                 const SliverToBoxAdapter(child: SizedBox(height: 96)),
                           ],
                         ),
-                    );
+          ),
+        ],
+      ),
+    );
   }
 }
 

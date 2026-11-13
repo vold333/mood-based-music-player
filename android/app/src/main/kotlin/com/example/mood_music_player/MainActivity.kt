@@ -1,4 +1,4 @@
-package com.example.mood_music_player
+package com.soul.music
 
 import com.ryanheise.audioservice.AudioServiceActivity
 

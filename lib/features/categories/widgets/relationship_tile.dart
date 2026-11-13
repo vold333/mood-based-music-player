@@ -1,8 +1,8 @@
-
 import 'package:flutter/material.dart';
 
 import '../../../../data/models/category.dart';
 import '../../../../data/models/category_relationship.dart';
+import '../../../shared/widgets/glass_surface.dart';
 import 'category_card.dart';
 
 /// One outgoing relationship: the target category, how many songs it has, and
@@ -33,61 +33,65 @@ class RelationshipTile extends StatelessWidget {
     final name =
         relationship.toCategoryName ?? target?.name ?? 'Unknown Category';
 
-    return Card(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onEdit,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: scheme.primaryContainer,
-                child: Icon(
-                  target != null
-                      ? categoryIcon(target!)
-                      : Icons.library_music_rounded,
-                  color: scheme.onPrimaryContainer,
+    return GlassSurface(
+      radius: 22,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onEdit,
+          borderRadius: BorderRadius.circular(22),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: scheme.primaryContainer,
+                  child: Icon(
+                    target != null
+                        ? categoryIcon(target!)
+                        : Icons.library_music_rounded,
+                    color: scheme.onPrimaryContainer,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: scheme.onSurface,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      songCount == 0
-                          ? 'No songs, skipped during playback'
-                          : songCountLabel(songCount),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                      const SizedBox(height: 2),
+                      Text(
+                        songCount == 0
+                            ? 'No songs, skipped during playback'
+                            : songCountLabel(songCount),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Change priority',
-                icon: const Icon(Icons.tune_rounded),
-                onPressed: onEdit,
-              ),
-              IconButton(
-                tooltip: 'Remove relationship',
-                icon: Icon(Icons.delete_outline, color: scheme.error),
-                onPressed: onRemove,
-              ),
-            ],
+                IconButton(
+                  tooltip: 'Change priority',
+                  icon: const Icon(Icons.tune_rounded),
+                  onPressed: onEdit,
+                ),
+                IconButton(
+                  tooltip: 'Remove relationship',
+                  icon: Icon(Icons.delete_outline, color: scheme.error),
+                  onPressed: onRemove,
+                ),
+              ],
+            ),
           ),
         ),
       ),

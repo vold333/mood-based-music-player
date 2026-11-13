@@ -42,6 +42,8 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.6
   shared_preferences: ^2.5.6
+  flutter_speed_dial: ^7.0.0
+  permission_handler: ^13.0.2
 
 dev_dependencies:
   flutter_test:
@@ -58,9 +60,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/images/branding/soul_king_logo.png"
+  image_path: "assets/images/branding/brook_skull_logo.png"
   adaptive_icon_background: "#F5F9FF"
-  adaptive_icon_foreground: "assets/images/branding/soul_king_logo.png"
+  adaptive_icon_foreground: "assets/images/branding/brook_skull_logo.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -82,6 +84,22 @@ flutter:
     - assets/images/empty_states/
     - assets/images/scanning/
     - assets/images/decorative/
+
+  # Plus Jakarta Sans (SIL OFL, see assets/fonts/OFL.txt), bundled so the app
+  # never needs a network call for its typeface.
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/PlusJakartaSans-ExtraBold.ttf
+          weight: 800
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

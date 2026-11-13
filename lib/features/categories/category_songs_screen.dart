@@ -1,4 +1,3 @@
-
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -12,7 +11,10 @@ import '../../shared/widgets/bulk_category_picker.dart';
 import '../player/now_playing_screen.dart';
 import '../../shared/widgets/artwork_image.dart';
 import '../../shared/widgets/mini_player.dart';
-import '../../shared/widgets/parchment_banner.dart';
+import '../../shared/widgets/category_header.dart';
+import '../../shared/widgets/glass_empty_state.dart';
+import '../../shared/widgets/glass_icon_badge.dart';
+import '../../shared/widgets/glass_surface.dart';
 import 'widgets/category_card.dart';
 
 class CategorySongsScreen extends StatefulWidget {
@@ -213,16 +215,13 @@ class _CategorySongsScreenState extends State<CategorySongsScreen> {
 
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(
-                      radius: 19,
-                      child: Icon(
-                        category.isDefault
-                            ? Icons.library_music
-                            : category.source == 'manual'
-                                ? Icons.folder_special
-                                : Icons.music_note,
-                        size: 19,
-                      ),
+                    leading: GlassIconBadge(
+                      size: 38,
+                      icon: category.isDefault
+                          ? Icons.library_music
+                          : category.source == 'manual'
+                              ? Icons.folder_special
+                              : Icons.music_note,
                     ),
                     title: Text(category.name),
                     subtitle: Text(
@@ -285,41 +284,17 @@ class _CategorySongsScreenState extends State<CategorySongsScreen> {
   }
 
   Widget _buildEmptyState() {
-    final theme = Theme.of(context);
-
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              SoulAssets.emptyCategory,
-              width: 230,
-              height: 220,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'No songs in this category',
-              style: theme.textTheme.titleMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Songs assigned to this category will appear here.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium,
-            ),
-          ],
-        ),
-      ),
+    return const GlassEmptyState(
+      asset: SoulAssets.emptyCategory,
+      title: 'No songs in this category',
+      message: 'Songs assigned to this category will appear here.',
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -329,7 +304,10 @@ class _CategorySongsScreenState extends State<CategorySongsScreen> {
                 onPressed: _clearSelection,
                 icon: const Icon(Icons.close_rounded),
               )
-            : null,
+            : IconButton(
+                icon: const Icon(Icons.arrow_back_ios_rounded),
+                onPressed: () => Navigator.pop(context),
+              ),
         title: Text(
           _selectionMode
               ? '${_selectedSongIds.length} selected'
@@ -353,127 +331,162 @@ class _CategorySongsScreenState extends State<CategorySongsScreen> {
                 ),
               ]
             : [
-          IconButton(
-            tooltip: 'Refresh songs',
-            onPressed: _loadInProgress ? null : _loadSongs,
-            icon: const Icon(Icons.refresh_rounded),
+                IconButton(
+                  tooltip: 'Refresh songs',
+                  onPressed: _loadInProgress ? null : _loadSongs,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+      ),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GrandLineBackdrop()),
+          Positioned.fill(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _songs.isEmpty
+                    ? _buildEmptyState()
+                    : Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                            child: CategoryHeader(
+                              artworkAsset: SoulAssets.artworkForCategory(
+                                widget.category,
+                              ),
+                              title: widget.category.name,
+                              subtitle: songCountLabel(_songs.length),
+                              playTooltip: 'Play category',
+                              onPlay: _selectionMode ? null : _playCategory,
+                            ),
+                          ),
+                          Expanded(
+                            // One glass panel holds the list, like All Songs.
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                              child: GlassSurface(
+                                radius: 28,
+                                child: Material(
+                                  type: MaterialType.transparency,
+                                  child: ListView.separated(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 8,
+                                    ),
+                                    itemCount: _songs.length,
+                                    separatorBuilder: (_, __) =>
+                                        const Divider(
+                                      height: 1,
+                                      indent: 84,
+                                      endIndent: 16,
+                                    ),
+                                    itemBuilder: (context, index) {
+                                      final song = _songs[index];
+                                      final selected = song.id != null &&
+                                          _selectedSongIds.contains(song.id);
+
+                                      return ListTile(
+                                        selected: selected,
+                                        selectedTileColor: scheme
+                                            .primaryContainer
+                                            .withValues(alpha: 0.55),
+                                        selectedColor:
+                                            scheme.onPrimaryContainer,
+                                        shape:
+                                            const RoundedRectangleBorder(),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 5,
+                                        ),
+                                        leading: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (_selectionMode)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  right: 8,
+                                                ),
+                                                child: Icon(
+                                                  selected
+                                                      ? Icons.check_circle
+                                                      : Icons
+                                                          .radio_button_unchecked,
+                                                  color: selected
+                                                      ? scheme.primary
+                                                      : scheme.outline,
+                                                  size: 22,
+                                                ),
+                                              ),
+                                            ArtworkImage(
+                                              artworkPath: song.artworkPath,
+                                              size: 52,
+                                              borderRadius: 14,
+                                            ),
+                                          ],
+                                        ),
+                                        title: Text(
+                                          song.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.bodyLarge
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          song.artist ?? 'Unknown Artist',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              _formatDuration(song.duration),
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: scheme.onSurfaceVariant,
+                                              ),
+                                            ),
+                                            if (!_selectionMode) ...[
+                                              const SizedBox(width: 4),
+                                              IconButton(
+                                                tooltip: 'Change category',
+                                                icon: const Icon(
+                                                  Icons
+                                                      .drive_file_move_outlined,
+                                                ),
+                                                onPressed: () =>
+                                                    _showCategorySelector(
+                                                        song),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        onLongPress: () {
+                                          if (!_selectionMode) {
+                                            _toggleSelection(song);
+                                          }
+                                        },
+                                        onTap: () {
+                                          if (_selectionMode) {
+                                            _toggleSelection(song);
+                                          } else {
+                                            _playSong(song);
+                                          }
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _songs.isEmpty
-              ? _buildEmptyState()
-              : Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                      child: ParchmentBanner(
-                        artworkAsset:
-                            SoulAssets.artworkForCategory(widget.category),
-                        title: widget.category.name,
-                        subtitle: songCountLabel(_songs.length),
-                        playTooltip: 'Play category',
-                        onPlay: _selectionMode ? null : _playCategory,
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.separated(
-                        padding: const EdgeInsets.only(bottom: 0),
-                        itemCount: _songs.length + 1,
-                        separatorBuilder: (_, __) =>
-                            const Divider(
-                          height: 1,
-                          indent: 82,
-                        ),
-                        itemBuilder: (context, index) {
-                          if (index == _songs.length) {
-                            return Image.asset(
-                              SoulAssets.categoryBottomIsland,
-                              width: double.infinity,
-                              height: 126,
-                              fit: BoxFit.cover,
-                              alignment: Alignment.topCenter,
-                            );
-                          }
-
-                          final song = _songs[index];
-
-                          return ListTile(
-                            contentPadding:
-                                const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 5,
-                            ),
-                            leading: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (_selectionMode)
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: Icon(
-                                      song.id != null && _selectedSongIds.contains(song.id)
-                                          ? Icons.check_circle
-                                          : Icons.radio_button_unchecked,
-                                      color: song.id != null && _selectedSongIds.contains(song.id)
-                                          ? theme.colorScheme.primary
-                                          : theme.colorScheme.outline,
-                                      size: 22,
-                                    ),
-                                  ),
-                                ArtworkImage(
-                              artworkPath: song.artworkPath,
-                              size: 52,
-                              borderRadius: 10,
-                            ),
-                              ],
-                            ),
-                            title: Text(
-                              song.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              song.artist ?? 'Unknown Artist',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  _formatDuration(song.duration),
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                                if (!_selectionMode) ...[
-                                const SizedBox(width: 4),
-                                IconButton(
-                                  tooltip: 'Change category',
-                                  icon: const Icon(
-                                    Icons.drive_file_move_outlined,
-                                  ),
-                                  onPressed: () =>
-                                      _showCategorySelector(song),
-                                ),
-                              ],
-                              ],
-                            ),
-                            onLongPress: () {
-                              if (!_selectionMode) _toggleSelection(song);
-                            },
-                            onTap: () {
-                              if (_selectionMode) {
-                                _toggleSelection(song);
-                              } else {
-                                _playSong(song);
-                              }
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
       bottomNavigationBar: const MiniPlayer(),
     );
   }

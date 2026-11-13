@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/category.dart';
+import 'glass_icon_badge.dart';
 
 /// Category destination picker followed by an explicit bulk-move confirmation.
 class BulkCategoryPicker {
@@ -35,16 +36,13 @@ class BulkCategoryPicker {
               final category = available[index];
               return ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(
-                  radius: 19,
-                  child: Icon(
-                    category.isDefault
-                        ? Icons.library_music
-                        : category.source == 'manual'
-                            ? Icons.folder_special
-                            : Icons.music_note,
-                    size: 19,
-                  ),
+                leading: GlassIconBadge(
+                  size: 38,
+                  icon: category.isDefault
+                      ? Icons.library_music
+                      : category.source == 'manual'
+                          ? Icons.folder_special
+                          : Icons.music_note,
                 ),
                 title: Text(category.name),
                 subtitle: Text(

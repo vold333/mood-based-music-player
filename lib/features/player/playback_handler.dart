@@ -242,6 +242,13 @@ class PlaybackHandler extends BaseAudioHandler
   }
 
   void _broadcastState(PlaybackEvent event) {
+    print(
+      'SOUL KING STATE => '
+      'playing: ${_player.playing}, '
+      'processing: ${_player.processingState}, '
+      'position: ${_player.position}',
+    );
+
     final playing = _player.playing;
 
     final processingState = switch (_player.processingState) {

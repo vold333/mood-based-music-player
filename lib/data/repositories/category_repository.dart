@@ -1,8 +1,13 @@
 
+import 'package:sqflite/sqflite.dart';
+
 import '../../database/database_helper.dart';
 import '../models/category.dart';
 
 class CategoryRepository {
+  // Keep this in sync with SoulAssets.categoryIllustrations.length.
+  static const int _illustrationCycleLength = 14;
+
   final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
 
   // Get all categories.
@@ -75,11 +80,11 @@ class CategoryRepository {
         return existing.first['id'] as int;
       }
 
-      return txn.insert('categories', {
-        'name': normalizedGenre,
-        'is_default': 0,
-        'source': 'genre',
-      });
+      return _insertCategory(
+        txn,
+        name: normalizedGenre,
+        source: 'genre',
+      );
     });
   }
 
@@ -97,11 +102,59 @@ class CategoryRepository {
 
     final db = await _databaseHelper.database;
 
-    return db.insert('categories', {
-      'name': normalizedName,
-      'is_default': 0,
-      'source': 'manual',
+    return db.transaction((txn) async {
+      return _insertCategory(
+        txn,
+        name: normalizedName,
+        source: 'manual',
+      );
     });
+  }
+
+  // Insert a category and persist its place in the illustration cycle.
+  // Fill unused positions first; once all eight are occupied, wrap to the
+  // beginning of the cycle. This also handles categories deleted later.
+  Future<int> _insertCategory(
+    Transaction txn, {
+    required String name,
+    required String source,
+  }) async {
+    final id = await txn.insert('categories', {
+      'name': name,
+      'is_default': 0,
+      'source': source,
+    });
+
+    final existing = await txn.query(
+      'categories',
+      columns: ['illustration_index'],
+      where: 'is_default = ? AND id != ?',
+      whereArgs: [0, id],
+    );
+    final usedIndices = existing
+        .map((row) => row['illustration_index'] as int?)
+        .whereType<int>()
+        .toSet();
+
+    var illustrationIndex = -1;
+    for (var index = 0; index < _illustrationCycleLength; index++) {
+      if (!usedIndices.contains(index)) {
+        illustrationIndex = index;
+        break;
+      }
+    }
+    if (illustrationIndex == -1) {
+      illustrationIndex = existing.length % _illustrationCycleLength;
+    }
+
+    await txn.update(
+      'categories',
+      {'illustration_index': illustrationIndex},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    return id;
   }
 
   // Rename an existing category.

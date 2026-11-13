@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_palette.dart';
+import 'glass_tokens.dart';
 import 'soul_tokens.dart';
 
 /// Builds the two Soul King themes from [AppPalette] tokens.
@@ -53,12 +54,32 @@ class AppTheme {
       surfaceContainerHighest: p.card,
     );
 
+    final glass = GlassTokens.fromPalette(p);
+
     return ThemeData(
       colorScheme: scheme,
+      // Plus Jakarta Sans, bundled in assets/fonts.
+      fontFamily: 'PlusJakartaSans',
       scaffoldBackgroundColor: p.background,
       extensions: <ThemeExtension<dynamic>>[
         SoulTokens.fromPalette(p),
+        glass,
       ],
+      // Screens that sit on the Grand Line backdrop let it show through.
+      appBarTheme: AppBarTheme(
+        // backgroundColor: Colors.transparent,
+        backgroundColor: p.surface,
+        foregroundColor: p.onSurface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        titleTextStyle: TextStyle(
+          fontFamily: 'PlusJakartaSans',
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: p.onSurface,
+        ),
+      ),
       cardTheme: CardThemeData(
         color: p.surface,
         // Night: flat with a hairline. Day: a soft lift.
@@ -69,19 +90,52 @@ class AppTheme {
           side: BorderSide(color: p.outline),
         ),
       ),
+      dividerTheme: DividerThemeData(
+        color: p.outline.withValues(alpha: 0.6),
+        thickness: 1,
+        space: 1,
+      ),
       dialogTheme: DialogThemeData(
         backgroundColor: p.card,
+        surfaceTintColor: Colors.transparent,
+        elevation: 6,
+        shadowColor: glass.shadow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28),
+          side: BorderSide(color: glass.border),
+        ),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: p.card,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: p.outline),
+        ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: p.card,
         modalBackgroundColor: p.card,
+        surfaceTintColor: Colors.transparent,
         showDragHandle: true,
         dragHandleColor: p.outlineStrong,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          side: BorderSide(color: glass.border),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: p.inverseSurface,
+        contentTextStyle: TextStyle(
+          fontFamily: 'PlusJakartaSans',
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: p.onInverseSurface,
+        ),
+        actionTextColor: p.inversePrimary,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
